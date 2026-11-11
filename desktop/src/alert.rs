@@ -176,7 +176,7 @@ impl Alert {
         let need = BUTTON_WIDTH * buttons + BUTTON_GAP * (buttons - 1.0) + SIDE * 2.0;
         let widest = |s: &str, size: f32, weight: Weight| {
             s.lines()
-                .map(|l| measure.layout_no_wrap(l.to_owned(), weight.font(size), argb(INK)).size().x)
+                .map(|l| crate::look::text_width(&measure, l, size, weight))
                 .fold(0.0, f32::max)
         };
         let title = widest(&asking.title, 26.0, Weight::Bold) + if asking.icon.is_some() { 24.0 + 8.0 } else { 0.0 };
@@ -214,7 +214,7 @@ impl Alert {
             let ink = argb(INK);
             // the title, after its icon, centred
             let title_y = panel.top() + 21.0 + 31.0 / 2.0;
-            let words = painter.layout_no_wrap(asking.title.clone(), Weight::Bold.font(26.0), ink).size().x;
+            let words = crate::look::text_width(&painter, &asking.title, 26.0, Weight::Bold);
             let icon_w = if asking.icon.is_some() { 24.0 + 8.0 } else { 0.0 };
             let left = panel.center().x - (icon_w + words) / 2.0;
             if let Some(icon) = asking.icon {

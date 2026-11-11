@@ -362,7 +362,7 @@ impl SourceEditor {
     fn import_menu(&mut self, ui: &Ui, look: &mut Look, import: Rect) {
         let title = "Image source options";
         let title_height =
-            ui.painter().layout_no_wrap(title.to_owned(), Weight::Bold.font(22.0), Color32::WHITE).size().y;
+            crate::look::laid(ui.painter(), title, 22.0, Weight::Bold, Color32::WHITE).size().y;
         let height = panel::ARROW_HEIGHT + 16.0 + title_height + 12.0 + 3.0 * 44.0 + 2.0 + 20.0 + 44.0 + 8.0;
         let rect = Rect::from_min_size(pos2(import.center().x - 160.0, import.top() + 47.0), vec2(320.0, height));
         // nothing under it is touched

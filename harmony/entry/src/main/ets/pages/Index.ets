@@ -94,7 +94,42 @@ struct Index {
       clearInterval(this.pumpTimer);
       this.pumpTimer = -1;
     }
+    // nothing is left unanswered: the app waits on every ask it made, and this page is the only
+    // one that could answer them (an unanswered ask holds the app up until its own timeout)
+    this.answerEverythingPending();
     procraft.focused(false);
+  }
+
+  // Answers every ask still waiting, so the app is never left waiting on this page: the ones a
+  // picker or the clipboard was about to answer, and anything still queued.
+  private answerEverythingPending(): void {
+    const pending: Array<number> = [];
+    if (this.pendingPick >= 0) {
+      pending.push(this.pendingPick);
+      this.pendingPick = -1;
+    }
+    if (this.pendingClipboard >= 0) {
+      pending.push(this.pendingClipboard);
+      this.pendingClipboard = -1;
+    }
+    try {
+      const text = procraft.asks();
+      if (text !== undefined && text !== null && text.length > 0 && text !== '[]') {
+        const asked = JSON.parse(text) as Array<Ask>;
+        for (const ask of asked) {
+          pending.push(ask.id);
+        }
+      }
+    } catch (error) {
+      // (the page is going: nothing more to do about a queue that can't be read)
+    }
+    for (const id of pending) {
+      try {
+        procraft.answer(id, '', '', false);
+      } catch (error) {
+        // (the app is going too)
+      }
+    }
   }
 
   // Answers one of the app's asks. Each returns at once: a file picked is answered when the
@@ -241,16 +276,21 @@ struct Index {
       if (data.hasType(pasteboard.MIMETYPE_PIXELMAP)) {
         const pixels = data.getPrimaryPixelMap();
         if (pixels !== undefined) {
-          const info: image.ImageInfo = await pixels.getImageInfo();
-          const size: image.Size = info.size;
-          const buffer = new ArrayBuffer(size.width * size.height * 4);
-          await pixels.readPixelsToBuffer(buffer);
-          const bytes = new Uint8Array(buffer);
-          let hex = '';
-          for (let at = 0; at < bytes.length; at++) {
-            hex += bytes[at].toString(16).padStart(2, '0');
+          // the picture goes into the app's own folder as PNG, and the app is told its path: a
+          // picture's pixels as text would be tens of megabytes of hex, which the app would spend
+          // seconds parsing on its one thread (and a photograph would not fit at all)
+          const path = `${this.context().filesDir}/clipboard-${Date.now()}.png`;
+          // (the packer takes an open file's descriptor, not a path: it writes through it)
+          const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+          const packer = image.createImagePacker();
+          try {
+            const options: image.PackingOption = { format: 'image/png', quality: 100 };
+            await packer.packToFile(pixels, file.fd, options);
+            this.answerClipboard(`picture-file:${path}`);
+          } finally {
+            packer.release();
+            fs.closeSync(file);
           }
-          this.answerClipboard(`picture:${size.width}:${size.height}:${hex}`);
           return;
         }
       }
@@ -363,7 +403,7 @@ struct Index {
   // The asks the app made, taken and answered each frame.
   private pump(): void {
     const text = procraft.asks();
-    if (text === undefined || text.length === 0 || text === '[]') {
+    if (text === undefined || text === null || text.length === 0 || text === '[]') {
       return;
     }
     try {

@@ -4,7 +4,7 @@
 //! here is shown in English (see `lang::tr`).
 
 /// The Chinese for the English the interface writes, sorted so a lookup can bisect.
-static TABLE: [(&str, &str); 816] = [
+static TABLE: [(&str, &str); 817] = [
     ("2D Grid", "2D 网格"),
     ("30 Seconds", "30 秒"),
     ("3D Materials", "3D 材质"),
@@ -347,6 +347,7 @@ static TABLE: [(&str, &str); 816] = [
     ("Jitter Linear", "线性抖动"),
     ("Kerning", "字偶间距"),
     ("Keyboard shortcuts", "键盘快捷键"),
+    ("Language", "语言"),
     ("Last reset point: {day}", "上次重置点：{day}"),
     ("Layer", "图层"),
     ("Layer cleared", "图层已清除"),
@@ -505,7 +506,7 @@ static TABLE: [(&str, &str); 816] = [
     ("Preview size", "预览尺寸"),
     ("Previous colour", "上一个颜色"),
     ("Primary", "主色"),
-    ("Private", "私人"),
+    ("Private", "私有"),
     ("ProCraft starts again, with the artwork as it was last saved.", "ProCraft 将重新启动，作品保持为上次保存的状态。"),
     ("Project canvas", "投射画布"),
     ("Properties", "属性"),
@@ -627,7 +628,7 @@ static TABLE: [(&str, &str); 816] = [
     ("Split Complementary", "分裂互补色"),
     ("Square", "方形"),
     ("Stabilization", "防抖"),
-    ("Stack", "堆栈"),
+    ("Stack", "堆叠"),
     ("Stamp", "图章"),
     ("Stamp color jitter", "图章颜色抖动"),
     ("Start Gallery Recovery", "开始恢复图库"),
@@ -639,7 +640,7 @@ static TABLE: [(&str, &str); 816] = [
     ("Stroke properties", "笔触属性"),
     ("Strokes made in an adjustment undo together once it is left.", "在调整中画出的笔触会在退出调整时一并撤销。"),
     ("Studio", "工作室"),
-    ("Studio quality", "工作室画质"),
+    ("Studio quality", "工作室质量"),
     ("Style", "样式"),
     ("Stylus", "触控笔"),
     ("Subtract", "减去"),

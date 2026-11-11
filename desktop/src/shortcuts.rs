@@ -79,8 +79,9 @@ struct Laid {
 }
 
 fn lay_out(painter: &egui::Painter, groups: Vec<ShortcutGroup>) -> Vec<Laid> {
-    let galley =
-        |s: String, width: f32, colour: u32, weight: Weight| painter.layout(s, weight.font(14.0), argb(colour), width);
+    let galley = |s: &str, width: f32, colour: u32, weight: Weight| {
+        painter.layout(crate::lang::tr_cow(s).into_owned(), weight.font(14.0), argb(colour), width)
+    };
     groups
         .into_iter()
         .map(|g| {
@@ -88,8 +89,8 @@ fn lay_out(painter: &egui::Painter, groups: Vec<ShortcutGroup>) -> Vec<Laid> {
                 .rows
                 .into_iter()
                 .map(|r| {
-                    let keys = galley(r.keys, KEYS_WIDTH - 12.0, TITLE, Weight::Medium);
-                    let does = galley(r.does, COLUMN - KEYS_WIDTH, INK, Weight::Regular);
+                    let keys = galley(&r.keys, KEYS_WIDTH - 12.0, TITLE, Weight::Medium);
+                    let does = galley(&r.does, COLUMN - KEYS_WIDTH, INK, Weight::Regular);
                     (keys, does)
                 })
                 .collect();

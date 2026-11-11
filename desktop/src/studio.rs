@@ -1291,7 +1291,7 @@ impl Studio {
                         ui.painter().rect_filled(cell, 15, argb(pc::ACCENT));
                     }
                     let ink = if on { Color32::WHITE } else { argb(DIM) };
-                    let galley = ui.painter().layout_no_wrap((*label).to_owned(), Weight::Regular.font(13.0), ink);
+                    let galley = crate::look::laid(ui.painter(), label, 13.0, Weight::Regular, ink);
                     let left = cell.center().x - (30.0 + 2.0 + galley.size().x) / 2.0;
                     look.icon(ui, icon, pos2(left + 15.0, cell.center().y), 30.0, ink);
                     ui.painter().galley(pos2(left + 32.0, cell.center().y - galley.size().y / 2.0), galley, ink);
@@ -1520,7 +1520,7 @@ impl Studio {
         self.pad_input(ui, &response, area);
         // Drawing Pad
         let galley =
-            ui.painter().layout_no_wrap("Drawing Pad".to_owned(), Weight::SemiBold.font(16.0), argb(BUTTON_INK));
+            crate::look::laid(ui.painter(), "Drawing Pad", 16.0, Weight::SemiBold, argb(BUTTON_INK));
         let button =
             Rect::from_min_size(area.min + vec2(21.0, 21.0), vec2(9.0 + 26.0 + 6.0 + galley.size().x + 13.0, 43.0));
         ui.painter().rect_filled(button, 21.5, argb(BUTTON));
@@ -1924,7 +1924,7 @@ fn studio_slider(
     let room = pill.left() - 12.0 - line.left();
     let mut size = 17.0;
     while size > 17.0 * 0.6
-        && ui.painter().layout_no_wrap(label.to_owned(), Weight::Regular.font(size), Color32::WHITE).size().x > room
+        && crate::look::text_width(ui.painter(), label, size, Weight::Regular) > room
     {
         size -= 0.5;
     }

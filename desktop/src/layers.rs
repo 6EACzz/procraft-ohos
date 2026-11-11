@@ -1863,7 +1863,7 @@ fn galley(
         extra_letter_spacing: -0.045 * size,
         ..Default::default()
     };
-    job.append(text, 0.0, format);
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
     job.wrap = TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     ui.painter().layout_job(job)
 }

@@ -2034,7 +2034,7 @@ fn preset_row(ui: &Ui, row: Rect, name: &str, size: &str, profile: &str) {
 fn one_line(ui: &Ui, text: &str, size: f32, weight: Weight, colour: Color32, max_width: f32) -> Arc<egui::Galley> {
     let mut job = LayoutJob::default();
     let format = TextFormat { font_id: weight.font(size), color: colour, ..Default::default() };
-    job.append(text, 0.0, format);
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
     job.wrap = TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('\u{2026}') };
     ui.painter().layout_job(job)
 }

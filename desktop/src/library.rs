@@ -1481,7 +1481,7 @@ fn format(size: f32, weight: Weight, colour: Color32) -> TextFormat {
 /// Text on one line, cut short with an ellipsis past `max_width`.
 fn one_line(ui: &Ui, text: &str, size: f32, weight: Weight, colour: Color32, max_width: f32) -> Arc<egui::Galley> {
     let mut job = LayoutJob::default();
-    job.append(text, 0.0, format(size, weight, colour));
+    job.append(&crate::lang::tr_cow(text), 0.0, format(size, weight, colour));
     job.wrap = TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     ui.painter().layout_job(job)
 }

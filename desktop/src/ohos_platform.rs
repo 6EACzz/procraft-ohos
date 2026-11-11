@@ -80,6 +80,22 @@ fn ask(wanted: Wanted) -> Answered {
     wait(answer)
 }
 
+/// Queues `wanted` without waiting for the shell to answer it: for a caller on the shell's own
+/// thread (the app failing to start), which is the only thread that could show it — waiting there
+/// would wait on itself.
+fn ask_unwaited(wanted: Wanted) {
+    let (done, answer) = channel();
+    // (nothing ever reads it: the answer is dropped with the queue entry)
+    drop(answer);
+    let id = {
+        let mut next = NEXT.lock().unwrap_or_else(|e| e.into_inner());
+        let id = *next;
+        *next += 1;
+        id
+    };
+    QUEUE.lock().unwrap_or_else(|e| e.into_inner()).push(Queued { id, wanted, answer: done });
+}
+
 /// Waits for an answer, going on without one if the shell never gives it.
 fn wait(answer: Receiver<Answered>) -> Answered {
     match answer.recv_timeout(std::time::Duration::from_secs(600)) {
@@ -201,6 +217,12 @@ fn ask_wanted(wanted: Wanted) -> PickedPaths {
 }
 
 /// A message with an OK button, waiting until it is seen.
+/// Shows `text`, queued and not waited for: for the shell's own thread (see [`ask_unwaited`]).
+pub fn say_unwaited(title: &str, text: &str, error: bool) {
+    ask_unwaited(Wanted::Say { title: title.to_owned(), text: text.to_owned(), error });
+}
+
+/// Shows `text` with an OK button, waiting until it is seen.
 pub fn say(title: &str, text: &str, error: bool) {
     let _ = ask(Wanted::Say { title: title.to_owned(), text: text.to_owned(), error });
 }
@@ -236,6 +258,16 @@ pub fn keyboard(shown: bool) {
 pub fn clipboard_of(text: &str) -> Option<ClipboardAnswer> {
     if text == "nothing" || text.is_empty() {
         return Some(ClipboardAnswer::Nothing);
+    }
+    // a picture the shell wrote into the app's own folder (a clipboard's, which is a PNG):
+    // read here, so the shell never hands over megabytes of pixels as words
+    if let Some(path) = text.strip_prefix("picture-file:") {
+        let rgba = std::fs::read(path).ok().and_then(|bytes| crate::files::png_rgba(&bytes));
+        let _ = std::fs::remove_file(path);
+        return match rgba {
+            Some((width, height, rgba)) => Some(ClipboardAnswer::Picture { width, height, rgba }),
+            None => Some(ClipboardAnswer::Nothing),
+        };
     }
     if let Some(rest) = text.strip_prefix("picture:") {
         let mut parts = rest.splitn(3, ':');

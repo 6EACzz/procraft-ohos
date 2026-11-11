@@ -398,7 +398,7 @@ impl AnimatedExport {
             // Cancel and Done at the top right
             let done_rect =
                 Rect::from_min_size(pos2(screen.right() - 16.0 - 44.0, screen.top() + 16.0), vec2(44.0, 45.0));
-            let galley = ui.painter().layout_no_wrap("Cancel".to_owned(), Weight::Regular.font(17.0), argb(CANCEL_INK));
+            let galley = crate::look::laid(ui.painter(), "Cancel", 17.0, Weight::Regular, argb(CANCEL_INK));
             let capsule = Rect::from_min_size(
                 pos2(done_rect.left() - 13.0 - galley.size().x - 26.0, done_rect.center().y - 21.5),
                 vec2(galley.size().x + 26.0, 43.0),

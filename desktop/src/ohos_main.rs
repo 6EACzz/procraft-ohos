@@ -342,8 +342,9 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
         }
     }
     log::info!("ProCraft starts: {width}x{height} pixels, {pixels_per_point} pixels per point");
-    // a surface that went left its app stopping: waited for here, so two never draw at once
-    stop_app();
+    // a surface that went left its app stopping: waited for here (this is the app's own thread,
+    // not the shell's), so two never draw at once
+    join_stopped();
     let loop_ = Arc::new(TabletLoop::new());
     let wake = {
         let loop_ = Arc::clone(&loop_);
@@ -366,8 +367,11 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
     let (screen, _) = match made {
         Ok(made) => made,
         Err(e) => {
+            // (said through the queue, never shown from here: this is the shell's own thread,
+            // which is the only thread that could show it, so showing it here would wait on
+            // itself and the message would never come)
             log::error!("the window's surface couldn't be set up: {e}");
-            crate::platform::say("ProCraft", &format!("The canvas can't be shown: {e}"), true);
+            crate::ohos_platform::say_unwaited("ProCraft", &format!("{e}"), true);
             return;
         }
     };
@@ -387,15 +391,24 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
     }
 }
 
-/// Stops the app's own thread, if one runs, and waits for it: the artwork open is kept saved first
-/// (it is, in its own loop's last pass), and the files it was writing are finished.
+/// Tells the app's own thread to stop, without waiting for it.
+///
+/// This is called from the shell's own thread (the surface went), which is the thread the app's
+/// asks are answered on: waiting there for the app to finish would wait on the answer that thread
+/// alone can give, and hang the window for as long as the ask's own timeout. So the stopping is
+/// only asked for here; [`join_stopped`] waits, and is called from the app's next start instead.
 fn stop_app() {
-    let running = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take();
-    let Some(running) = running else { return };
-    // (the loop is told to stop, and woken: it keeps what is open as it goes)
     if let Some(loop_) = WAKE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        // (the loop keeps what is open as it goes)
         loop_.stop();
     }
+}
+
+/// Waits for a stopping app's thread to have gone: called before another starts, which is the
+/// app's own thread (`procraft_start`), never the shell's.
+fn join_stopped() {
+    let running = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let Some(running) = running else { return };
     if running.join().is_err() {
         log::error!("the app's thread stopped with a panic");
     }
@@ -464,7 +477,11 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         let gap = app.host.as_ref().map_or(Duration::from_millis(16), crate::host::Host::frame_gap);
         // a frame is due: the one the last asked for, or (nothing else drawing) the canvas's own
         let asked = app.again.take();
-        let canvas_wants = app.session.as_ref().is_some_and(|s| s.wants_frame())
+        // what the touches asked the app to do (undo, a fill, the view moved) is drawn for, and
+        // so is the canvas wanting a frame of its own: the desktop's `about_to_wait` asks for a
+        // redraw for the first of these, and the canvas's own want is the other
+        let commands_wait = !app.input.commands.is_empty();
+        let canvas_wants = (commands_wait || app.session.as_ref().is_some_and(|s| s.wants_frame()))
             && app.host.as_ref().is_some_and(|h| !h.minimised());
         let frame_due = asked.or(canvas_wants.then_some(now)).map(|due| due.max(last_drawn + gap));
         if frame_due.is_none_or(|due| due <= now) {
@@ -591,36 +608,132 @@ fn take(app: &mut App<TabletHost, TabletLoop>, said: Said) {
 }
 
 /// The system's key code, and what it types, as the app's own (`winit`'s).
+///
+/// The two numberings have nothing in common: the system's (`oh_key_code.h`) keeps its named keys
+/// in single digits and its letters, digits and punctuation as runs from `KEYCODE_0` and
+/// `KEYCODE_A` on, while `winit`'s follow a PC keyboard's scan codes. So each is named here, and
+/// a key with no name of the app's own (a function key, a media key) is left as the character it
+/// typed, if any.
 fn key_of(code: u32, text: u32) -> (Option<winit::keyboard::NamedKey>, Option<winit::keyboard::KeyCode>, Option<char>) {
     use winit::keyboard::{KeyCode, NamedKey};
-    let named = match code {
-        32 => Some(NamedKey::Space),
-        13 => Some(NamedKey::Enter),
-        8 => Some(NamedKey::Backspace),
-        46 => Some(NamedKey::Delete),
-        27 => Some(NamedKey::Escape),
-        9 => Some(NamedKey::Tab),
-        37 => Some(NamedKey::ArrowLeft),
-        39 => Some(NamedKey::ArrowRight),
-        38 => Some(NamedKey::ArrowUp),
-        40 => Some(NamedKey::ArrowDown),
-        _ => None,
+    /// The keys the app has a name for, and the system's own name for each: `oh_key_code.h`'s.
+    /// (The punctuation has no name of the app's — only a code — so it is a table of its own.)
+    const NAMED: &[(u32, NamedKey, KeyCode)] = &[
+        // the back key: the desktop closes what is open with Escape, and so does this
+        (2, NamedKey::Escape, KeyCode::Escape), // KEYCODE_BACK
+        (2012, NamedKey::ArrowUp, KeyCode::ArrowUp), // KEYCODE_DPAD_UP
+        (2013, NamedKey::ArrowDown, KeyCode::ArrowDown), // KEYCODE_DPAD_DOWN
+        (2014, NamedKey::ArrowLeft, KeyCode::ArrowLeft), // KEYCODE_DPAD_LEFT
+        (2015, NamedKey::ArrowRight, KeyCode::ArrowRight), // KEYCODE_DPAD_RIGHT
+        (2045, NamedKey::Alt, KeyCode::AltLeft), // KEYCODE_ALT_LEFT
+        (2046, NamedKey::Alt, KeyCode::AltRight), // KEYCODE_ALT_RIGHT
+        (2047, NamedKey::Shift, KeyCode::ShiftLeft), // KEYCODE_SHIFT_LEFT
+        (2048, NamedKey::Shift, KeyCode::ShiftRight), // KEYCODE_SHIFT_RIGHT
+        (2049, NamedKey::Tab, KeyCode::Tab), // KEYCODE_TAB
+        (2050, NamedKey::Space, KeyCode::Space), // KEYCODE_SPACE
+        (2054, NamedKey::Enter, KeyCode::Enter), // KEYCODE_ENTER
+        (2055, NamedKey::Backspace, KeyCode::Backspace), // KEYCODE_DEL (the one that goes back)
+        (2068, NamedKey::PageUp, KeyCode::PageUp), // KEYCODE_PAGE_UP
+        (2069, NamedKey::PageDown, KeyCode::PageDown), // KEYCODE_PAGE_DOWN
+        (2070, NamedKey::Escape, KeyCode::Escape), // KEYCODE_ESCAPE
+        (2071, NamedKey::Delete, KeyCode::Delete), // KEYCODE_FORWARD_DEL
+        (2072, NamedKey::Control, KeyCode::ControlLeft), // KEYCODE_CTRL_LEFT
+        (2073, NamedKey::Control, KeyCode::ControlRight), // KEYCODE_CTRL_RIGHT
+        (2081, NamedKey::Home, KeyCode::Home), // KEYCODE_MOVE_HOME
+        (2082, NamedKey::End, KeyCode::End), // KEYCODE_MOVE_END
+    ];
+    /// The punctuation: it has a code of the app's, but no name.
+    const PUNCTUATION: &[(u32, KeyCode, char)] = &[
+        (2043, KeyCode::Comma, ','),        // KEYCODE_COMMA
+        (2044, KeyCode::Period, '.'),       // KEYCODE_PERIOD
+        (2056, KeyCode::Backquote, '`'),    // KEYCODE_GRAVE
+        (2057, KeyCode::Minus, '-'),        // KEYCODE_MINUS
+        (2058, KeyCode::Equal, '='),        // KEYCODE_EQUALS
+        (2059, KeyCode::BracketLeft, '['),  // KEYCODE_LEFT_BRACKET
+        (2060, KeyCode::BracketRight, ']'), // KEYCODE_RIGHT_BRACKET
+        (2061, KeyCode::Backslash, '\\'),   // KEYCODE_BACKSLASH
+        (2062, KeyCode::Semicolon, ';'),    // KEYCODE_SEMICOLON
+        (2063, KeyCode::Quote, '\''),       // KEYCODE_APOSTROPHE
+        (2064, KeyCode::Slash, '/'),        // KEYCODE_SLASH
+    ];
+    let (named, key_code) = match NAMED.iter().find(|(at, ..)| *at == code) {
+        Some((_, named, key_code)) => (Some(*named), Some(*key_code)),
+        // the digits, `0` on, and the letters, `A` on (a run each), and the punctuation
+        None => match PUNCTUATION.iter().find(|(at, ..)| *at == code) {
+            Some((_, key_code, _)) => (None, Some(*key_code)),
+            None => match code {
+                2000..=2009 => (None, Some(digit_key(code - 2000))),
+                2017..=2042 => (None, Some(letter_key(code - 2017))),
+                _ => (None, None),
+            },
+        },
     };
-    let key_code = match code {
-        32 => Some(KeyCode::Space),
-        13 => Some(KeyCode::Enter),
-        8 => Some(KeyCode::Backspace),
-        46 => Some(KeyCode::Delete),
-        27 => Some(KeyCode::Escape),
-        9 => Some(KeyCode::Tab),
-        37 => Some(KeyCode::ArrowLeft),
-        39 => Some(KeyCode::ArrowRight),
-        38 => Some(KeyCode::ArrowUp),
-        40 => Some(KeyCode::ArrowDown),
-        c if (u32::from(b'A')..=u32::from(b'Z')).contains(&c) => Some(KeyCode::KeyA),
-        _ => None,
-    };
-    (named, key_code, (text != 0).then(|| char::from_u32(text)).flatten())
+    // what it types: what the system gave, or failing that the letter, digit or punctuation the
+    // key is (the system's `text` is empty for the keys a soft keyboard would have typed)
+    let typed = (text != 0)
+        .then(|| char::from_u32(text))
+        .flatten()
+        .or_else(|| match PUNCTUATION.iter().find(|(at, ..)| *at == code) {
+            Some((.., typed)) => Some(*typed),
+            None => match code {
+                2000..=2009 => char::from_digit(code - 2000, 10),
+                2017..=2042 => char::from_u32(u32::from(b'a') + (code - 2017)),
+                _ => None,
+            },
+        });
+    (named, key_code, typed)
+}
+
+/// The system's `KEYCODE_0` run, as the app's own digits (`0` is at 0).
+fn digit_key(offset: u32) -> winit::keyboard::KeyCode {
+    use winit::keyboard::KeyCode;
+    const DIGITS: [KeyCode; 10] = [
+        KeyCode::Digit0,
+        KeyCode::Digit1,
+        KeyCode::Digit2,
+        KeyCode::Digit3,
+        KeyCode::Digit4,
+        KeyCode::Digit5,
+        KeyCode::Digit6,
+        KeyCode::Digit7,
+        KeyCode::Digit8,
+        KeyCode::Digit9,
+    ];
+    DIGITS.get(offset as usize).copied().unwrap_or(KeyCode::Digit0)
+}
+
+/// The system's `KEYCODE_A` run, as the app's own letters (`A` is at 0).
+fn letter_key(offset: u32) -> winit::keyboard::KeyCode {
+    use winit::keyboard::KeyCode;
+    const LETTERS: [KeyCode; 26] = [
+        KeyCode::KeyA,
+        KeyCode::KeyB,
+        KeyCode::KeyC,
+        KeyCode::KeyD,
+        KeyCode::KeyE,
+        KeyCode::KeyF,
+        KeyCode::KeyG,
+        KeyCode::KeyH,
+        KeyCode::KeyI,
+        KeyCode::KeyJ,
+        KeyCode::KeyK,
+        KeyCode::KeyL,
+        KeyCode::KeyM,
+        KeyCode::KeyN,
+        KeyCode::KeyO,
+        KeyCode::KeyP,
+        KeyCode::KeyQ,
+        KeyCode::KeyR,
+        KeyCode::KeyS,
+        KeyCode::KeyT,
+        KeyCode::KeyU,
+        KeyCode::KeyV,
+        KeyCode::KeyW,
+        KeyCode::KeyX,
+        KeyCode::KeyY,
+        KeyCode::KeyZ,
+    ];
+    LETTERS.get(offset as usize).copied().unwrap_or(KeyCode::KeyA)
 }
 
 /// Takes what the shell gathered since the last frame: its touches' and keys' own events, and the

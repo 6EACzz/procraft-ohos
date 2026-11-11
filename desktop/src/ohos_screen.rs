@@ -33,6 +33,8 @@ pub struct OhosScreen {
     pixels_per_point: f32,
     /// When the interface began (egui's clock).
     began: Instant,
+    /// The modifiers as they were handed over last frame (said again only when they change).
+    modifiers: egui::Modifiers,
     /// The canvases' pipelines being made on a thread of their own (seconds): whether they were
     /// made without a GPU error.
     canvases: Option<std::thread::JoinHandle<bool>>,
@@ -157,6 +159,7 @@ impl OhosScreen {
                 size,
                 pixels_per_point,
                 began: Instant::now(),
+                modifiers: egui::Modifiers::default(),
                 canvases,
                 canvases_since: Instant::now(),
             },
@@ -280,7 +283,12 @@ impl OhosScreen {
         let now = Instant::now();
         let points = (self.size.0 as f32 / self.pixels_per_point, self.size.1 as f32 / self.pixels_per_point);
         // the modifiers held, as egui wants them each frame
-        events.push(egui::Event::ModifiersChanged(modifiers));
+        // only when they changed: an event each frame is an interface that never settles, and
+        // egui would take every frame as one with something to answer
+        if modifiers != self.modifiers {
+            self.modifiers = modifiers;
+            events.push(egui::Event::ModifiersChanged(modifiers));
+        }
         let mut raw = egui::RawInput {
             viewport_id: egui::ViewportId::ROOT,
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(points.0, points.1))),
@@ -313,7 +321,7 @@ impl OhosScreen {
         started: Instant,
         output: egui::FullOutput,
     ) -> Option<Duration> {
-        let egui::FullOutput { platform_output, mut textures_delta, shapes, pixels_per_point, viewport_output } =
+        let egui::FullOutput { platform_output, mut textures_delta, shapes, pixels_per_point: _, viewport_output } =
             output;
         crate::ohos_input::set_cursor(platform_output.cursor_icon);
         let interface_after = viewport_output

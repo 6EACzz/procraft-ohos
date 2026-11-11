@@ -156,12 +156,32 @@ OH_NativeXComponent_Callback g_callback = {
     .DispatchTouchEvent = OnTouch,
 };
 
-// A mouse's or a pen's move over the surface, its buttons, and a wheel: a desktop's own.
+// A mouse's move over the surface, its buttons and its wheel: a desktop's own. The app takes it
+// as a pointer that is down and up (the same id every time, since a mouse is one pointer), as a
+// pen's touch is taken, so a mouse draws and pans exactly as a pen does.
+constexpr uint64_t MOUSE_ID = 0xFFFF;
+
 void OnMouse(OH_NativeXComponent* component, void* window) {
     OH_NativeXComponent_MouseEvent event;
     if (OH_NativeXComponent_GetMouseEvent(component, window, &event) != OH_NATIVEXCOMPONENT_RESULT_SUCCESS) return;
-    // a mouse hovers as a pen does (the brush's outline follows it)
-    procraft_hover(0xFFFF, static_cast<double>(event.x), static_cast<double>(event.y), 0.0, 0.0, false);
+    const double x = static_cast<double>(event.x);
+    const double y = static_cast<double>(event.y);
+    switch (event.action) {
+        case OH_NATIVEXCOMPONENT_MOUSE_PRESS:
+            procraft_touch(MOUSE_ID, 0, x, y, 1.0, 0.0, 0.0, false, false);
+            break;
+        case OH_NATIVEXCOMPONENT_MOUSE_RELEASE:
+            procraft_touch(MOUSE_ID, 2, x, y, 1.0, 0.0, 0.0, false, false);
+            break;
+        case OH_NATIVEXCOMPONENT_MOUSE_CANCEL:
+            procraft_touch(MOUSE_ID, 3, x, y, 1.0, 0.0, 0.0, false, false);
+            break;
+        default:
+            // a move: down it paints, up it hovers (the brush's outline follows it)
+            procraft_touch(MOUSE_ID, 1, x, y, 1.0, 0.0, 0.0, false, false);
+            procraft_hover(MOUSE_ID, x, y, 0.0, 0.0, false);
+            break;
+    }
 }
 
 void OnMouseHover(OH_NativeXComponent* component, void* window) {
@@ -269,10 +289,18 @@ napi_value Resized(napi_env env, napi_callback_info info) {
 // What the app asked the shell for, since the last call: an array of `{id, kind, details}`, each
 // answered by `answer(id, paths, clipboard, done)`. The shell calls this each frame.
 napi_value Asks(napi_env env, napi_callback_info info) {
-    const char* text = procraft_asks();
-    if (text == nullptr) return nullptr;
+    // always a string: the page reads .length of what this gives, and an undefined or null there
+    // is a TypeError that stops the process
     napi_value result = nullptr;
-    napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &result);
+    if (napi_create_string_utf8(env, "[]", 2, &result) != napi_ok) {
+        return nullptr;
+    }
+    const char* text = procraft_asks();
+    if (text == nullptr) return result;
+    napi_value said = nullptr;
+    if (napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &said) == napi_ok) {
+        result = said;
+    }
     procraft_asks_free(text);
     return result;
 }

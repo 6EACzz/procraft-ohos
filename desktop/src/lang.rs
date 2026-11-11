@@ -74,6 +74,16 @@ pub fn tr(text: &'static str) -> &'static str {
     }
 }
 
+/// `text` in the interface's language, borrowed rather than built: what the interface draws goes
+/// through here, so drawing a word costs nothing while the interface is English.
+pub fn tr_cow(text: &str) -> std::borrow::Cow<'_, str> {
+    match language() {
+        Language::English => std::borrow::Cow::Borrowed(text),
+        // an entry is the interface's own words, in the table for as long as the app runs
+        Language::Chinese => std::borrow::Cow::Borrowed(zh(text).unwrap_or(text)),
+    }
+}
+
 /// `text` in the interface's language, with `fills` put where it has `{}` (the pieces are
 /// themselves translated, and an entry keeps their order).
 pub fn tr_fill(text: &'static str, fills: &[&str]) -> String {

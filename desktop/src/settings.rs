@@ -198,7 +198,9 @@ pub fn show(ctx: &egui::Context, prefs: &mut Prefs) -> Option<Said> {
                 for (k, (heading, rows)) in GROUPS.iter().enumerate() {
                     ui.add_space(24.0);
                     let (h, _) = ui.allocate_exact_size(vec2(width, 16.0), Sense::hover());
-                    let words = heading.to_uppercase();
+                    // a heading is the interface's words: it is translated before it is capitalised,
+                    // since a translation has no capitals to raise
+                    let words = crate::lang::tr(heading).to_uppercase();
                     text(
                         ui.painter(),
                         h.left_center() + vec2(MARGIN + 16.0, 0.0),
@@ -291,7 +293,7 @@ fn row_height(ui: &egui::Ui, row: &Row, width: f32) -> f32 {
 fn choice_menu(ui: &egui::Ui, value: Rect, options: &[&str], chosen: usize, close: &mut bool) -> Option<usize> {
     let widest = options
         .iter()
-        .map(|o| ui.painter().layout_no_wrap((*o).into(), Weight::Regular.font(17.0), argb(INK)).size().x)
+        .map(|o| crate::look::text_width(ui.painter(), o, 17.0, Weight::Regular))
         .fold(0.0, f32::max);
     let size = vec2((widest + 24.0).max(112.0), 8.0 + 48.0 * options.len() as f32 + 8.0);
     let menu = Rect::from_min_size(value.left_bottom(), size);

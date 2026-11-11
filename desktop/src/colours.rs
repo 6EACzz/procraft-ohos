@@ -1577,7 +1577,7 @@ impl Colours {
             }
             let ink = if on { Color32::WHITE } else { argb(PANEL_TITLE) };
             let weight = if on { Weight::SemiBold } else { Weight::Regular };
-            let words = ui.painter().layout_no_wrap(label.into(), weight.font(15.0), ink).size().x;
+            let words = crate::look::text_width(ui.painter(), label, 15.0, weight);
             let left = cell.center().x - (21.0 + 6.0 + words) / 2.0;
             look.icon(ui, icon, pos2(left + 10.5, cell.center().y), 21.0, ink);
             text(ui.painter(), pos2(left + 27.0, cell.center().y), Align2::LEFT_CENTER, label, 15.0, weight, ink);

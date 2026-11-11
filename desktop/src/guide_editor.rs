@@ -539,7 +539,7 @@ impl GuideEditor {
 /// slider chip: 12 either side of the words and 3 above and below, 8 right of and 4 above where a
 /// plain value sits. Returns whether it was tapped.
 fn size_chip(ui: &egui::Ui, at: Pos2, width: f32, label: &str) -> bool {
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), Weight::Regular.font(16.0), argb(CHIP_INK));
+    let galley = crate::look::laid(ui.painter(), label, 16.0, Weight::Regular, argb(CHIP_INK));
     let right = at.x + width - 15.0 + 8.0;
     let top = at.y + 6.0 - 4.0;
     let chip = Rect::from_min_max(pos2(right - galley.size().x - 24.0, top), pos2(right, top + galley.size().y + 6.0));

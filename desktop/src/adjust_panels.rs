@@ -116,7 +116,7 @@ pub(crate) fn kinds_switch(
             ui.painter().rect_filled(cell, 15, argb(pc::ACCENT));
         }
         let ink = if on { Color32::WHITE } else { argb(MODES_TEXT) };
-        let words = ui.painter().layout_no_wrap(label.into(), Weight::Regular.font(14.0), ink).size().x;
+        let words = crate::look::text_width(ui.painter(), label, 14.0, Weight::Regular);
         let left = cell.center().x - (30.0 + 2.0 + words) / 2.0;
         look.icon(ui, glyph, pos2(left + 15.0, cell.center().y), 30.0, ink);
         text(ui.painter(), pos2(left + 32.0, cell.center().y), Align2::LEFT_CENTER, label, 14.0, Weight::Regular, ink);

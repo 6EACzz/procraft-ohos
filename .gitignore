@@ -18,3 +18,6 @@ harmony/.hvigor/
 harmony/hvigor/hvigor-cache/
 harmony/entry/libs/arm64-v8a/*.so
 .cargo/
+
+# the NDK build tree the HarmonyOS toolchain drops beside the sources
+harmony/entry/.cxx/

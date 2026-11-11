@@ -308,7 +308,7 @@ impl Overlays {
             let name = if self.shape_editing { "Editing" } else { label(info.kind) };
             // laid out from the middle: the icon, the name, the kind in grey and the disclosure
             let painter = ui.painter();
-            let measure = |s: &str, size: f32, w: Weight| painter.layout_no_wrap(s.into(), w.font(size), ink).size().x;
+            let measure = |s: &str, size: f32, w: Weight| crate::look::text_width(painter, s, size, w);
             let mut width = 29.0 + measure(name, 17.0, Weight::Bold);
             if self.shape_editing && several {
                 width += 3.0 + measure(label(info.kind), 15.0, Weight::Regular);
@@ -355,11 +355,7 @@ impl Overlays {
                 if *kind == info.kind {
                     ui.painter().rect_filled(cell, 14, argb(pc::ACCENT));
                 }
-                let words = ui
-                    .painter()
-                    .layout_no_wrap(label(*kind).into(), Weight::Regular.font(14.0), Color32::WHITE)
-                    .size()
-                    .x;
+                let words = crate::look::text_width(ui.painter(), label(*kind), 14.0, Weight::Regular);
                 let start = cell.center().x - (28.0 + 6.0 + words) / 2.0;
                 look.icon(ui, icon(*kind), pos2(start + 14.0, cell.center().y), 28.0, Color32::WHITE);
                 text(

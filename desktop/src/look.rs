@@ -429,7 +429,11 @@ fn tracked_runs(
             extra_letter_spacing: tracking * size,
             ..Default::default()
         };
-        job.append(text, 0.0, format);
+        // the interface's own words in the interface's language, here rather than at each of the
+        // three hundred places that draw a word: what is drawn and what is measured are then the
+        // same string, whichever language it is in (a name the user wrote is not in the table, and
+        // is shown as it was written)
+        job.append(&crate::lang::tr_cow(text), 0.0, format);
     }
     let galley = painter.layout_job(job);
     let rect = align.anchor_size(at, galley.size());
@@ -453,7 +457,7 @@ pub fn wrapped(
         extra_letter_spacing: TRACKING * size,
         ..Default::default()
     };
-    job.append(text, 0.0, format);
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
     job.wrap.max_width = width;
     painter.layout_job(job)
 }
@@ -477,7 +481,7 @@ pub fn wrapped_centred(
         line_height: Some(line_height),
         ..Default::default()
     };
-    job.append(text, 0.0, format);
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
     job.wrap.max_width = width;
     job.halign = egui::Align::Center;
     painter.layout_job(job)
@@ -504,11 +508,20 @@ pub fn dragged_by(held: &mut Option<(egui::Id, f32)>, response: &egui::Response)
     }
 }
 
+/// Text of one weight, one line, laid out to be drawn: [`text`] for the places that draw their
+/// own galley rather than have one drawn for them.
+pub fn laid(painter: &Painter, text: &str, size: f32, weight: Weight, colour: Color32) -> Arc<egui::Galley> {
+    let mut job = LayoutJob::default();
+    let format = TextFormat { font_id: weight.font(size), color: colour, extra_letter_spacing: TRACKING * size, ..Default::default() };
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
+    painter.layout_job(job)
+}
+
 /// How wide `text` of one weight is at `size` points, as [`text`] draws it.
 pub fn text_width(painter: &Painter, text: &str, size: f32, weight: Weight) -> f32 {
     let mut job = LayoutJob::default();
     let format = TextFormat { font_id: weight.font(size), extra_letter_spacing: TRACKING * size, ..Default::default() };
-    job.append(text, 0.0, format);
+    job.append(&crate::lang::tr_cow(text), 0.0, format);
     painter.layout_job(job).size().x
 }
 

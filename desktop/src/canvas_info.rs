@@ -458,7 +458,7 @@ impl CanvasInfo {
         // "Made by" and the name, centred together
         let field_width =
             if self.author.is_empty() { 60.0 } else { (self.author.chars().count() as f32 * 12.0 + 16.0).min(260.0) };
-        let made_by = ui.painter().layout_no_wrap("Made by ".into(), Weight::Regular.font(21.0), argb(INK));
+        let made_by = crate::look::laid(ui.painter(), "Made by ", 21.0, Weight::Regular, argb(INK));
         let left = card.center().x - (made_by.size().x + field_width) / 2.0;
         let line_top = card.top() + 146.0;
         painter.galley(pos2(left, line_top), made_by.clone(), argb(INK));

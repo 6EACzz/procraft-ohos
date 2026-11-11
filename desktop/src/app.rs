@@ -62,7 +62,7 @@ pub fn veil(ctx: &egui::Context, what: &str) {
 }
 
 /// What the window says while the canvases' pipelines are made.
-const GETTING_READY: &str = "正在准备画布… Getting the canvas ready…";
+const GETTING_READY: &str = "Getting the canvas ready…";
 
 /// What a canvas's veil says while it opens: while the pipelines it waits for are still being
 /// made (`waiting`), that.
@@ -76,7 +76,7 @@ pub fn getting_ready_note(ctx: &egui::Context) {
     let screen = ctx.content_rect();
     let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("getting ready")));
     let ink = crate::look::argb(crate::look::pc::TEXT);
-    let wide = painter.layout_no_wrap(GETTING_READY.to_owned(), crate::look::Weight::Regular.font(15.0), ink).size().x;
+    let wide = crate::look::text_width(&painter, GETTING_READY, 15.0, crate::look::Weight::Regular);
     let note = egui::Rect::from_center_size(
         egui::pos2(screen.center().x, screen.bottom() - 24.0 - 18.0),
         egui::vec2(wide + 36.0, 36.0),
