@@ -461,7 +461,7 @@ impl Gallery {
                         ui.painter(),
                         at,
                         Align2::CENTER_CENTER,
-                        "Tap + to start a new canvas",
+                        crate::lang::tr("Tap + to start a new canvas"),
                         17.0,
                         Weight::Regular,
                         argb(TEXT),
@@ -660,6 +660,21 @@ impl Gallery {
                 (SelectAction::More, "More", 61.0),
             ]
         };
+        // (the width each was laid out at is the English's: a translation is as wide as it draws)
+        let actions: Vec<(SelectAction, &str, f32)> = actions
+            .iter()
+            .map(|&(action, label, w)| {
+                let label = crate::lang::tr(label);
+                let measured = crate::look::text_width(
+                    painter,
+                    label,
+                    16.0,
+                    Weight::Regular,
+                );
+                (action, label, w.max(measured + 28.0))
+            })
+            .collect();
+        let actions = actions.as_slice();
         let done = Rect::from_min_size(pos2(screen.right() - 20.0 - 44.0, top + 10.0), vec2(44.0, 45.0));
         let width: f32 = actions.iter().map(|a| a.2).sum();
         let capsule = Rect::from_min_size(pos2(done.left() - 13.0 - width, top + 10.0), vec2(width, 45.0));
@@ -1136,20 +1151,30 @@ impl Gallery {
             }
         }
         let plus = Rect::from_min_size(pos2(screen.right() - 20.0 - 44.0, top + 10.0), vec2(44.0, 45.0));
-        let capsule_width = 69.0 + 71.0 + 66.0;
+        // what each of the three does, the words it shows, and the width it was laid out at (a
+        // translation is as wide as it draws)
+        let buttons: [(u8, &'static str, f32); 3] = [(0, "Select", 69.0), (1, "Import", 71.0), (2, "Photo", 66.0)];
+        let buttons: Vec<(u8, &'static str, f32)> = buttons
+            .iter()
+            .map(|&(what, label, width)| {
+                let label = crate::lang::tr(label);
+                (what, label, width.max(crate::look::text_width(painter, label, 16.0, Weight::Regular) + 28.0))
+            })
+            .collect();
+        let capsule_width: f32 = buttons.iter().map(|b| b.2).sum();
         let capsule =
             Rect::from_min_size(pos2(plus.left() - 12.0 - capsule_width, top + 10.0), vec2(capsule_width, 45.0));
         painter.rect_filled(capsule, 22.5, argb(CAPSULE));
         painter.rect_stroke(capsule, 22.5, Stroke::new(1.0, argb(CAPSULE_EDGE)), egui::StrokeKind::Inside);
         let mut x = capsule.left();
         let mut asked = None;
-        for (label, width) in [("Select", 69.0), ("Import", 71.0), ("Photo", 66.0)] {
+        for &(what, label, width) in &buttons {
             let button = Rect::from_min_size(pos2(x, capsule.top()), vec2(width, 45.0));
             text(painter, button.center(), Align2::CENTER_CENTER, label, 16.0, Weight::Regular, argb(TEXT));
-            if ui.interact(button, ui.scope_id().with(label), Sense::click()).clicked() {
-                asked = match label {
-                    "Import" => Some(Asked::Import(self.folder())),
-                    "Photo" => Some(Asked::Photo(self.folder())),
+            if ui.interact(button, ui.scope_id().with(("gallery button", what)), Sense::click()).clicked() {
+                asked = match what {
+                    1 => Some(Asked::Import(self.folder())),
+                    2 => Some(Asked::Photo(self.folder())),
                     _ => {
                         self.selecting = true;
                         self.new_open = false;

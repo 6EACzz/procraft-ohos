@@ -150,10 +150,23 @@ pub fn is_pen(id: u64) -> Option<bool> {
 }
 
 /// The system said pointer `id` is a pen (`pen`) or a finger.
-#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux", target_env = "ohos")), allow(dead_code))]
 pub(crate) fn pointer_kind(id: u64, pen: bool) {
     if let Ok(mut kinds) = KINDS.lock() {
         kinds.get_or_insert_with(Default::default).insert(id, pen);
+    }
+}
+
+/// The system said pointer `id` is the pen's eraser end.
+#[cfg_attr(not(target_env = "ohos"), allow(dead_code))]
+pub(crate) fn eraser_kind(id: u64, eraser: bool) {
+    if let Ok(mut flags) = FLAGS.lock() {
+        let at = flags.get_or_insert_with(Default::default).entry(id).or_insert(0);
+        if eraser {
+            *at |= FLAG_ERASER;
+        } else {
+            *at &= !FLAG_ERASER;
+        }
     }
 }
 

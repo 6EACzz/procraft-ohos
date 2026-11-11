@@ -76,10 +76,16 @@ enum Row {
     Toggle(Setting, &'static str, &'static str),
     SpeedDistance(&'static str),
     Choice(Pick, &'static str),
+    /// The interface's language, its own row (it is a language, not a number in a list).
+    Language(&'static str),
 }
 
 /// The groups of rows, each under its heading (none for "").
-const GROUPS: [(&str, &[Row]); 5] = [
+const GROUPS: [(&str, &[Row]); 6] = [
+    (
+        "",
+        &[Row::Language("Language")],
+    ),
     (
         "",
         &[
@@ -268,11 +274,15 @@ fn detail(ui: &egui::Ui, words: &str, width: f32) -> std::sync::Arc<egui::Galley
 fn row_height(ui: &egui::Ui, row: &Row, width: f32) -> f32 {
     match row {
         // a line of the name over what it does, 10 above and below; the switch beside them
-        Row::Toggle(_, _, what) => 10.0 + 21.0 + detail(ui, what, width - 32.0 - 63.0 - 12.0).size().y + 10.0,
+        Row::Toggle(_, _, what) => {
+            10.0 + 21.0 + detail(ui, crate::lang::tr(what), width - 32.0 - 63.0 - 12.0).size().y + 10.0
+        }
         // the slider 44 tall over what it does, 6 above and below and 4 under the words
-        Row::SpeedDistance(what) => 6.0 + 44.0 + detail(ui, what, width - 32.0).size().y + 4.0 + 6.0,
+        Row::SpeedDistance(what) => {
+            6.0 + 44.0 + detail(ui, crate::lang::tr(what), width - 32.0).size().y + 4.0 + 6.0
+        }
         // a line of the name, 14 above and below
-        Row::Choice(..) => 14.0 + 21.0 + 14.0,
+        Row::Choice(..) | Row::Language(_) => 14.0 + 21.0 + 14.0,
     }
 }
 
@@ -326,8 +336,8 @@ fn draw_row(ui: &egui::Ui, row: &Row, at: Rect, prefs: &mut Prefs, id: (usize, u
         Row::Toggle(setting, name, what) => {
             let words =
                 Rect::from_min_max(at.min + vec2(16.0, 10.0), pos2(at.right() - 16.0 - 63.0 - 12.0, at.bottom()));
-            text(ui.painter(), words.min, Align2::LEFT_TOP, name, 17.0, Weight::Regular, argb(INK));
-            let galley = detail(ui, what, words.width());
+            text(ui.painter(), words.min, Align2::LEFT_TOP, crate::lang::tr(name), 17.0, Weight::Regular, argb(INK));
+            let galley = detail(ui, crate::lang::tr(what), words.width());
             ui.painter().galley(words.min + vec2(0.0, 21.0), galley, argb(DIM));
             let on = *setting.of(prefs);
             crate::transform::switch(ui, pos2(at.right() - 16.0 - 63.0, at.center().y - 14.0), on, ("settings", id));
@@ -363,13 +373,21 @@ fn draw_row(ui: &egui::Ui, row: &Row, at: Rect, prefs: &mut Prefs, id: (usize, u
             painter.circle_filled(pos2(x1, y), 2.0, argb(LINE));
             painter.line_segment([pos2(x0, y), pos2(x, y)], Stroke::new(4.0, argb(BLUE)));
             painter.circle_filled(pos2(x, y), r, Color32::WHITE);
-            let galley = detail(ui, what, slider.width());
+            let galley = detail(ui, crate::lang::tr(what), slider.width());
             painter.galley(pos2(slider.left(), slider.bottom()), galley, argb(DIM));
             changed
         }
         Row::Choice(pick, name) => {
             let cy = at.center().y;
-            text(ui.painter(), pos2(at.left() + 16.0, cy), Align2::LEFT_CENTER, name, 17.0, Weight::Regular, argb(INK));
+            text(
+                ui.painter(),
+                pos2(at.left() + 16.0, cy),
+                Align2::LEFT_CENTER,
+                crate::lang::tr(name),
+                17.0,
+                Weight::Regular,
+                argb(INK),
+            );
             let options = pick.options();
             let chosen = (*pick.of(prefs)).min(options.len().saturating_sub(1));
             let shown = options.get(chosen).copied().unwrap_or_default();
@@ -394,6 +412,44 @@ fn draw_row(ui: &egui::Ui, row: &Row, at: Rect, prefs: &mut Prefs, id: (usize, u
                 if let Some(i) = tapped {
                     *pick.of(prefs) = i;
                     prefs.keep();
+                    return true;
+                }
+            } else if ui.interact(at, ui.scope_id().with(("settings row", id)), Sense::click()).clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(key, Some(id)));
+            }
+            false
+        }
+        Row::Language(name) => {
+            let cy = at.center().y;
+            text(ui.painter(), pos2(at.left() + 16.0, cy), Align2::LEFT_CENTER, name, 17.0, Weight::Regular, argb(INK));
+            let shown = prefs.language.name();
+            let value = text(
+                ui.painter(),
+                pos2(at.right() - 16.0, cy),
+                Align2::RIGHT_CENTER,
+                shown,
+                17.0,
+                Weight::Regular,
+                argb(DIM),
+            );
+            let key = Id::unique("settings choice open");
+            let open = ui.ctx().data(|d| d.get_temp::<Option<(usize, usize)>>(key)).flatten();
+            let options: Vec<&str> = crate::lang::Language::ALL.iter().map(|l| l.name()).collect();
+            let chosen = crate::lang::Language::ALL.iter().position(|l| *l == prefs.language).unwrap_or(0);
+            if open == Some(id) {
+                let mut close = false;
+                let tapped = choice_menu(ui, value, &options, chosen, &mut close);
+                if close {
+                    ui.ctx().data_mut(|d| d.insert_temp(key, None::<(usize, usize)>));
+                }
+                if let Some(i) = tapped
+                    && let Some(language) = crate::lang::Language::ALL.get(i).copied()
+                {
+                    prefs.language = language;
+                    crate::lang::set_language(language);
+                    prefs.keep();
+                    // every word on the page changes: drawn again, and the window with it
+                    ui.ctx().request_repaint();
                     return true;
                 }
             } else if ui.interact(at, ui.scope_id().with(("settings row", id)), Sense::click()).clicked() {

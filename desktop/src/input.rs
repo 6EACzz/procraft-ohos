@@ -255,6 +255,59 @@ impl Input {
     /// the interface rather than the canvas). True if anything changed. Presses go by `over` alone:
     /// `consumed` is worked out from the last frame, so a press that comes straight after the
     /// pointer (or a finger) arrives from the interface would count as the interface's.
+    /// A key went down or up, as the platform tells it (a tablet's keyboard, or its pen's own
+    /// buttons): the two the canvas answers itself, Space (to move the view) and R (to turn it).
+    /// Everything else is the interface's (egui's), which takes its keys apart from these.
+    pub fn on_key(
+        &mut self,
+        session: &CanvasSession,
+        code: winit::keyboard::KeyCode,
+        pressed: bool,
+        repeat: bool,
+        consumed: bool,
+    ) -> bool {
+        use winit::keyboard::KeyCode;
+        match code {
+            KeyCode::Space => {
+                let held = pressed && !consumed;
+                if held && !self.space {
+                    self.space_used = self.command_key || self.control;
+                }
+                self.space_tapped |= self.space && !held && !self.space_used;
+                self.space = held;
+                if !self.space && self.panning && !self.down.contains(&MOUSE) {
+                    self.panning = false;
+                    self.pen_panning = None;
+                }
+                if !self.space && self.key_drag == Some(KeyDrag::Zoom) {
+                    self.end_key_drag(session);
+                }
+                true
+            }
+            KeyCode::KeyR => {
+                match pressed {
+                    true if !repeat => {
+                        let typed = consumed || self.keys_taken || self.command_key || self.control || self.alt;
+                        self.r_key = (!typed).then(Instant::now);
+                        self.r_dragged = false;
+                    }
+                    true => {}
+                    false => {
+                        let tapped = self.r_key.take().is_some_and(|since| since.elapsed() < R_TAP);
+                        if tapped && !self.r_dragged && !consumed {
+                            session.key_turn(self.shift);
+                        }
+                        if self.key_drag == Some(KeyDrag::Turn) {
+                            self.end_key_drag(session);
+                        }
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn on_event(
         &mut self,
         session: &CanvasSession,
@@ -788,5 +841,31 @@ mod tests {
         let finger = WindowEvent::Touch(Touch { device_id, phase, location, force: None, id: 7011 });
         send(&mut input, &session, &finger);
         assert!(input.pressing() && !input.pressing_from_afar());
+    }
+
+    #[test]
+    fn two_fingers_tapped_together_undo() {
+        let (session, mut input) = (shown(), Input::default());
+        session.set_touch_settings(procraft_core::TouchSettings::default());
+        // something to undo: a stroke, drawn as the system gives one (a finger paints)
+        send(&mut input, &session, &finger(9101, TouchPhase::Started, 200.0, 200.0));
+        send(&mut input, &session, &finger(9101, TouchPhase::Moved, 260.0, 240.0));
+        send(&mut input, &session, &finger(9101, TouchPhase::Ended, 260.0, 240.0));
+        input.commands.clear();
+        // (a stroke on a canvas with no undo step is no step) the history has something to take
+        let steps = session.edits();
+        // two fingers down together and up together, still, inside a tap's time
+        send(&mut input, &session, &finger(9102, TouchPhase::Started, 300.0, 300.0));
+        send(&mut input, &session, &finger(9103, TouchPhase::Started, 400.0, 300.0));
+        send(&mut input, &session, &finger(9102, TouchPhase::Ended, 300.0, 300.0));
+        send(&mut input, &session, &finger(9103, TouchPhase::Ended, 400.0, 300.0));
+        assert!(input.commands.contains(&TouchCommand::Undo), "{:?}", input.commands);
+        let _ = steps;
+        // the loop's own ticking leaves nothing behind that would undo twice
+        for _ in 0..3 {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            input.tick(&session);
+        }
+        assert_eq!(input.commands.iter().filter(|c| **c == TouchCommand::Undo).count(), 1, "{:?}", input.commands);
     }
 }

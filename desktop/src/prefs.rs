@@ -78,6 +78,8 @@ pub struct Prefs {
     /// finger first touched, even if it drifts before lifting.
     pub touch_companion: bool,
     pub tap_assistance: bool,
+    /// The language the interface is drawn in.
+    pub language: crate::lang::Language,
     /// Undo, redo, tools and panels click as they are used.
     pub feedback_sounds: bool,
     /// The short colour panel shows the history, not the active palette.
@@ -121,6 +123,7 @@ impl Default for Prefs {
             colour_names: false,
             touch_companion: false,
             tap_assistance: false,
+            language: crate::lang::Language::default(),
             feedback_sounds: false,
             colour_history_shown: false,
             drag_format: 0,
@@ -181,6 +184,7 @@ impl Prefs {
                 "color_names" => p.colour_names = on,
                 "single_touch_companion" => p.touch_companion = on,
                 "tap_assistance" => p.tap_assistance = on,
+                "language" => p.language = crate::lang::Language::of_key(value).unwrap_or(p.language),
                 "feedback_sounds" => p.feedback_sounds = on,
                 "color_history_shown" => p.colour_history_shown = on,
                 "drag_format" => p.drag_format = value.parse::<usize>().map_or(0, |t| t.min(DRAG_FORMATS.len() - 1)),
@@ -234,6 +238,7 @@ impl Prefs {
             format!("color_names {}", self.colour_names),
             format!("single_touch_companion {}", self.touch_companion),
             format!("tap_assistance {}", self.tap_assistance),
+            format!("language {}", self.language.key()),
             format!("feedback_sounds {}", self.feedback_sounds),
             format!("color_history_shown {}", self.colour_history_shown),
             format!("drag_format {}", self.drag_format),
@@ -246,6 +251,7 @@ impl Prefs {
 
     /// The artwork follows them.
     pub fn apply(&self, session: &CanvasSession) {
+        crate::lang::set_language(self.language);
         crate::look::set_light(self.light_interface);
         session.set_light_interface(self.light_interface);
         session.set_selection_x_ray(self.selection_x_ray);

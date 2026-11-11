@@ -40,17 +40,16 @@ impl Held {
     /// What is on the clipboard now (`picture` says which files are pictures).
     fn read(picture: fn(&std::path::Path) -> bool) -> Held {
         let _one = LOOKING.lock();
-        let Ok(mut clipboard) = arboard::Clipboard::new() else { return Held::Nothing };
-        if let Ok(image) = clipboard.get_image() {
-            return Held::Picture(ThumbnailImage {
-                width: image.width as u32,
-                height: image.height as u32,
-                rgba: image.bytes.into_owned(),
-            });
+        match crate::platform::clipboard_read() {
+            crate::platform::Clipboard::Picture((width, height, rgba)) => {
+                Held::Picture(ThumbnailImage { width, height, rgba })
+            }
+            crate::platform::Clipboard::Files(files) => {
+                let files: Vec<PathBuf> = files.into_iter().filter(|f| picture(f)).collect();
+                if files.is_empty() { Held::Nothing } else { Held::Files(files) }
+            }
+            crate::platform::Clipboard::Text(_) | crate::platform::Clipboard::Nothing => Held::Nothing,
         }
-        let files = clipboard.get().file_list().unwrap_or_default();
-        let files: Vec<PathBuf> = files.into_iter().filter(|f| picture(f)).collect();
-        if files.is_empty() { Held::Nothing } else { Held::Files(files) }
     }
 
     /// What tells this from what the clipboard held before.

@@ -605,7 +605,7 @@ fn search_field(ui: &mut Ui, field: Rect, query: &mut String) {
 
 /// A picture the user picks, as a source image; none if they pick none or it can't be read.
 fn picked_picture(title: &str) -> Option<Vec<u8>> {
-    let path = rfd::FileDialog::new().set_title(title).add_filter("Pictures", PICTURES).pick_file()?;
+    let path = crate::platform::pick(crate::platform::Picked::default().title(title).filter("Pictures", PICTURES)).into_iter().next()?;
     let picture = std::fs::read(&path).ok().and_then(|bytes| image::load_from_memory(&bytes).ok());
     let Some(picture) = picture else {
         crate::files::tell("Can't import it", "This picture can't be opened.");
@@ -627,10 +627,10 @@ fn pasted() -> Option<Vec<u8>> {
             return Some(source);
         }
     }
-    let image = arboard::Clipboard::new().ok().and_then(|mut c| c.get_image().ok());
-    let Some(image) = image else {
+    let Some(crate::platform::Clipboard::Picture((width, height, rgba))) = Some(crate::platform::clipboard_read())
+    else {
         crate::files::tell("Can't paste", "There's no picture to paste.");
         return None;
     };
-    Some(procraft_core::source_from_picture(image.bytes.into_owned(), image.width as u32, image.height as u32))
+    Some(procraft_core::source_from_picture(rgba, width, height))
 }

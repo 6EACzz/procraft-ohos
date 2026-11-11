@@ -11,6 +11,12 @@ description = "ProCraft on the desktop (Windows, macOS, Linux): the same engine 
 name = "procraft"
 path = "src/main.rs"
 
+# The same interface as a library: the tablet (HarmonyOS) loads it as a shared library, its shell
+# calling into it over N-API (see `src/ohos_main.rs`).
+[lib]
+name = "procraft_ui"
+crate-type = ["rlib", "cdylib"]
+
 [lints]
 workspace = true
 
@@ -33,6 +39,11 @@ png = { workspace = true }
 # Canvas information's dates, in local time
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp", "tiff"] }
+
+# The tablet's window (an OHNativeWindow from its XComponent) handed to wgpu as the surface's
+# handle: wgpu's OpenGL ES backend takes it (its Vulkan one knows no such handle)
+[target.'cfg(target_env = "ohos")'.dependencies]
+raw-window-handle = "0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 wgpu = { workspace = true, features = ["metal"] }

@@ -463,12 +463,10 @@ fn on_white(frame: &procraft_core::ThumbnailImage, w: u32, h: u32) -> Vec<u8> {
 /// The video made copied where the person picks.
 fn save_as(made: &std::path::Path) {
     let name = made.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let Some(to) = rfd::FileDialog::new()
-        .set_title("Export time-lapse video")
-        .set_file_name(name)
-        .add_filter("MP4 video", &["mp4"])
-        .save_file()
-    else {
+    let picked = crate::platform::pick(
+        crate::platform::Picked::default().title("Export time-lapse video").name(name).filter("MP4 video", &["mp4"]).saving(),
+    );
+    let Some(to) = picked.into_iter().next() else {
         return;
     };
     if let Err(e) = std::fs::copy(made, &to) {

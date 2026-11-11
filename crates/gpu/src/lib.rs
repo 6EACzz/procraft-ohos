@@ -143,6 +143,11 @@ impl Gpu {
         }
         if cfg!(target_os = "android") {
             vec![wgpu::Backends::VULKAN, wgpu::Backends::GL]
+        } else if cfg!(target_env = "ohos") {
+            // OpenHarmony hands its windows over as an OHNativeWindow, which wgpu's OpenGL ES
+            // backend takes (its Vulkan one knows no such handle: it fails as the surface is
+            // made). Vulkan is still tried first on a display that isn't the window's.
+            vec![wgpu::Backends::GL]
         } else if cfg!(all(windows, target_arch = "aarch64")) {
             vec![wgpu::Backends::DX12, wgpu::Backends::VULKAN, wgpu::Backends::GL]
         } else if cfg!(windows) {

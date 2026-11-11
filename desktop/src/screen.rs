@@ -420,6 +420,99 @@ impl Screen {
     }
 }
 
+/// The window as the app sees it (see `host.rs`): the desktop's own, on winit's window.
+impl crate::host::Host for Screen {
+    fn size(&self) -> (u32, u32) {
+        let size = self.window.inner_size();
+        (size.width, size.height)
+    }
+
+    fn scale(&self) -> f32 {
+        self.window.scale_factor() as f32
+    }
+
+    fn ctx(&self) -> &egui::Context {
+        self.egui.egui_ctx()
+    }
+
+    fn gpu(&self) -> &Gpu {
+        &self.gpu
+    }
+
+    fn request_redraw(&self) {
+        self.window.request_redraw();
+    }
+
+    fn set_title(&self, title: &str) {
+        self.window.set_title(title);
+    }
+
+    fn window_icon(&self) -> Option<winit::window::Icon> {
+        crate::window_icon()
+    }
+
+    fn frame_gap(&self) -> Duration {
+        crate::frame_gap(&self.window)
+    }
+
+    fn minimised(&self) -> bool {
+        Screen::minimised(self)
+    }
+
+    fn take_input(&mut self) -> egui::RawInput {
+        self.egui.take_egui_input(&self.window)
+    }
+
+    fn draw(&mut self, session: Option<&CanvasSession>, started: Instant, output: egui::FullOutput) -> Option<Duration> {
+        Screen::draw(self, session, started, output)
+    }
+
+    fn set_pixels_per_point(&mut self, pixels_per_point: f32) {
+        // the desktop's interface scale is the window's (and egui's zoom), set by the system
+        let _ = pixels_per_point;
+    }
+
+    fn size_interface(&self, plugins: &Plugins, session: Option<&CanvasSession>) {
+        Screen::size_interface(self, plugins, session);
+    }
+
+    fn over_interface(&self, p: (f32, f32), canvas: egui::Rect) -> bool {
+        Screen::over_interface(self, p, canvas)
+    }
+
+    fn draw_pad(&mut self, pad: &CanvasSession, size: (u32, u32), started: Instant) -> egui::TextureId {
+        Screen::draw_pad(self, pad, size, started)
+    }
+
+    fn drop_pad(&mut self) {
+        Screen::drop_pad(self);
+    }
+
+    fn canvases_made(&mut self) -> Option<bool> {
+        Screen::canvases_made(self)
+    }
+
+    fn canvases_waited(&self) -> Option<Duration> {
+        Screen::canvases_waited(self)
+    }
+
+    fn gl_busy(&self) -> bool {
+        Screen::gl_busy(self)
+    }
+
+    fn canvases_later(&self) -> bool {
+        Screen::canvases_later(self)
+    }
+
+    fn tried(&self) -> (usize, bool) {
+        (self.tried, self.last)
+    }
+
+    fn set_visible(&self, shown: bool) {
+        self.window.set_visible(shown);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use winit::dpi::PhysicalSize;

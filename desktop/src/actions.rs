@@ -1181,7 +1181,15 @@ fn group_view(ui: &mut Ui, rows: &[Row], g: usize, swipes: &mut Swipes) -> (Opti
     let mut rows = rows.iter().peekable();
     if let Some(Row::Heading(label)) = rows.peek() {
         let (band, _) = ui.allocate_exact_size(vec2(width, HEADING_HEIGHT), Sense::hover());
-        text(ui.painter(), band.min + vec2(13.0, 7.0), Align2::LEFT_TOP, label, 14.0, Weight::Bold, argb(PANEL_TITLE));
+        text(
+            ui.painter(),
+            band.min + vec2(13.0, 7.0),
+            Align2::LEFT_TOP,
+            crate::lang::tr(label),
+            14.0,
+            Weight::Bold,
+            argb(PANEL_TITLE),
+        );
         rows.next();
     }
     let rows: Vec<&Row> = rows.collect();
@@ -1212,18 +1220,21 @@ fn group_view(ui: &mut Ui, rows: &[Row], g: usize, swipes: &mut Swipes) -> (Opti
         match row {
             Row::Button(label, value, act) => {
                 let response = ui.interact(cell, ui.scope_id().with(("row", g, i)), Sense::click());
-                button_row(ui, &response, cell, corners, label, *value, act.is_some());
+                let (label, value) = (crate::lang::tr(label), value.map(crate::lang::tr));
+                button_row(ui, &response, cell, corners, label, value, act.is_some());
                 if response.clicked() {
                     tapped = act.map(Tapped::Act);
                 }
             }
             Row::Private(label, private, act, private_act) => {
+                let (label, private) = (crate::lang::tr(label), crate::lang::tr(private));
                 if let Some(t) = private_row(ui, cell, corners, (label, private), (*act, *private_act), swipes, (g, i))
                 {
                     tapped = Some(t);
                 }
             }
             Row::Switch(label, on, Some(act)) => {
+                let label = crate::lang::tr(label);
                 text(ui.painter(), label_at, Align2::LEFT_CENTER, label, 17.0, Weight::Regular, argb(ACTIONS_ROW));
                 crate::transform::switch(ui, switch_at, *on, label);
                 if ui.interact(cell, ui.scope_id().with(("switch", g, i)), Sense::click()).clicked() {
@@ -1231,6 +1242,7 @@ fn group_view(ui: &mut Ui, rows: &[Row], g: usize, swipes: &mut Swipes) -> (Opti
                 }
             }
             Row::Switch(label, on, None) => {
+                let label = crate::lang::tr(label);
                 text(ui.painter(), label_at, Align2::LEFT_CENTER, label, 17.0, Weight::Regular, argb(ACTIONS_DISABLED));
                 // a 63 x 28 switch, shown as it is: it can't be changed here
                 let track = Rect::from_min_size(switch_at, vec2(63.0, 28.0));
@@ -1240,7 +1252,7 @@ fn group_view(ui: &mut Ui, rows: &[Row], g: usize, swipes: &mut Swipes) -> (Opti
                 ui.painter().rect_filled(knob, 12, argb(SWITCH_FIXED_KNOB));
             }
             Row::Slide(label, value, fraction, _, which) => {
-                if let Some(at) = slide_row(ui, cell, label, value, *fraction, (g, i)) {
+                if let Some(at) = slide_row(ui, cell, crate::lang::tr(label), value, *fraction, (g, i)) {
                     tapped = Some(Tapped::Slid(*which, at));
                 }
             }

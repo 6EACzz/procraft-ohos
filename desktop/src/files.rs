@@ -8,7 +8,6 @@ use procraft_core::{
     CanvasPreset, CanvasSession, KeptGestures, ModelFile, PagesOutcome, PsdOutcome, ThumbnailImage, export_file_name,
     import_pages, import_psd, preset_height, preset_width,
 };
-use rfd::{FileDialog, MessageDialog, MessageLevel};
 
 use crate::ui::Interface;
 
@@ -81,6 +80,17 @@ impl Format {
 /// Where the app keeps what it keeps between runs (palettes and the like): the platform's place
 /// for an app's data.
 pub fn app_dir() -> PathBuf {
+    // a tablet's own sandbox, which its shell hands over as it starts (nothing under `$HOME` is
+    // writable there)
+    if let Some(dir) = crate::files::own_folder() {
+        return dir;
+    }
+    // on the tablet the sandbox is found from where the app itself lives, before anything is
+    // kept: what the shell says comes later, if at all
+    #[cfg(target_env = "ohos")]
+    if let Some(dir) = tablet_sandbox() {
+        return dir;
+    }
     let home = || std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
     if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(home).join("ProCraft")
@@ -94,9 +104,38 @@ pub fn app_dir() -> PathBuf {
     }
 }
 
+/// The app's own sandbox on the tablet, as the system itself names it (see `ohos_files`): none
+/// if the system won't say.
+#[cfg(target_env = "ohos")]
+fn tablet_sandbox() -> Option<PathBuf> {
+    let dir = crate::ohos_files::files_dir()?;
+    let candidate = dir.join("procraft");
+    match std::fs::create_dir_all(&candidate) {
+        Ok(()) => Some(candidate),
+        Err(e) => {
+            log::warn!("the app's files directory {} can't be written: {e}", dir.display());
+            None
+        }
+    }
+}
+
+/// The folder the app keeps what it keeps in, on a system that hands it over (a tablet's own
+/// sandbox: nowhere under `$HOME` is writable there).
+static OWN_FOLDER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// The shell says where the app's own files go.
+pub fn set_own_folder(dir: &str) {
+    *OWN_FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = Some(PathBuf::from(dir));
+}
+
+/// Where the app keeps its own files, as the shell said (none: the system's own place).
+pub fn own_folder() -> Option<PathBuf> {
+    OWN_FOLDER.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
 /// Shows a passing message with an OK button.
 pub fn say(text: &str) {
-    MessageDialog::new().set_level(MessageLevel::Info).set_title("ProCraft").set_description(text).show();
+    crate::platform::say("ProCraft", text, false);
 }
 
 /// Whether the file at `path` holds brushes, by its name (a zip by what it holds): ours (a brush
@@ -168,7 +207,7 @@ pub fn tell(title: &str, text: &str) {
             return;
         }
     }
-    MessageDialog::new().set_level(MessageLevel::Error).set_title(title).set_description(text).show();
+    crate::platform::say(title, text, true);
 }
 
 /// Whether `program` can be run here.
@@ -247,12 +286,14 @@ pub fn tell_what_was_told() {
 pub fn save_file(bytes: &[u8], name: &str, extension: &str, kind: &str) {
     let safe: String = name.chars().map(|c| if c.is_alphanumeric() || " _-".contains(c) { c } else { '_' }).collect();
     let safe = if safe.trim().is_empty() { "Brush".to_owned() } else { safe };
-    let Some(path) = FileDialog::new()
-        .set_title(format!("Share {kind}"))
-        .add_filter(kind, &[extension])
-        .set_file_name(format!("{safe}.{extension}"))
-        .save_file()
-    else {
+    let picked = crate::platform::pick(
+        crate::platform::Picked::default()
+            .title(format!("Share {kind}"))
+            .filter(kind, &[extension])
+            .name(format!("{safe}.{extension}"))
+            .saving(),
+    );
+    let Some(path) = picked.into_iter().next() else {
         return;
     };
     // a file there already is replaced only once this one is written whole
@@ -263,7 +304,7 @@ pub fn save_file(bytes: &[u8], name: &str, extension: &str, kind: &str) {
 
 /// A file the user picks (titled `title`), read whole, with its name.
 pub fn pick_file(title: &str) -> Option<(Vec<u8>, String)> {
-    let path = FileDialog::new().set_title(title).pick_file()?;
+    let path = crate::platform::pick(crate::platform::Picked::default().title(title)).into_iter().next()?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     match std::fs::read(&path) {
         Ok(bytes) => Some((bytes, name)),
@@ -388,7 +429,9 @@ pub fn keep_preset_time_lapse(preset: &CanvasPreset, dir: &str) {
 /// A colour profile the user picks (an .icc file), added to those a canvas can be in; its name, or
 /// none (said so) if it isn't one.
 pub fn import_profile() -> Option<String> {
-    let path = FileDialog::new().set_title("Import").add_filter("Color profiles", &["icc", "icm"]).pick_file()?;
+    let path = crate::platform::pick(crate::platform::Picked::default().title("Import").filter("Color profiles", &["icc", "icm"]))
+        .into_iter()
+        .next()?;
     let name = std::fs::read(path).ok().and_then(procraft_core::import_profile);
     if name.is_none() {
         tell("Can't import", "This file isn't a color profile.");
@@ -405,19 +448,17 @@ pub fn is_plugin_file(path: &Path) -> bool {
 
 /// A plugin file the user picks.
 pub fn pick_plugin() -> Option<PathBuf> {
-    FileDialog::new()
-        .set_title("Import")
-        .add_filter("ProCraft plugins", &["procraft-plugin", "procraftplugin"])
-        .pick_file()
+    crate::platform::pick(crate::platform::Picked::default().title("Import").filter("ProCraft plugins", &["procraft-plugin", "procraftplugin"]))
+        .into_iter()
+        .next()
 }
 
 /// A picture the user picks (PNG, JPEG, WebP, GIF, BMP or TIFF), to make a new artwork of
 /// ([`picture_artwork`]).
 pub fn pick_picture() -> Option<PathBuf> {
-    FileDialog::new()
-        .set_title("Photo")
-        .add_filter("Pictures", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"])
-        .pick_file()
+    crate::platform::pick(crate::platform::Picked::default().title("Photo").filter("Pictures", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"]))
+        .into_iter()
+        .next()
 }
 
 /// The picture at `path` as a new one-layer artwork its size, named after the file; why not if
@@ -484,7 +525,8 @@ pub fn pick_artwork_files(more: &[&str]) -> Option<Vec<PathBuf>> {
         "tiff",
     ];
     let all: Vec<&str> = artworks.iter().chain(more).copied().collect();
-    FileDialog::new().set_title("Import").add_filter("Artworks and models", &all).pick_files()
+    let picked = crate::platform::pick(crate::platform::Picked::default().title("Import").filter("Artworks and models", &all).many());
+    (!picked.is_empty()).then_some(picked)
 }
 
 /// The artwork in the files `paths` (picked, or dropped on the gallery): a layered package, a
@@ -648,11 +690,7 @@ pub fn read_png(path: &Path) -> Result<ThumbnailImage, String> {
 
 /// Shows the app's name and version.
 pub fn about() {
-    MessageDialog::new()
-        .set_level(MessageLevel::Info)
-        .set_title("ProCraft")
-        .set_description(format!("Version {}", env!("PROCRAFT_VERSION")))
-        .show();
+    crate::platform::say("ProCraft", &format!("Version {}", env!("PROCRAFT_VERSION")), false);
 }
 
 /// Saves the artwork as a .procraft package, where it was last saved unless `ask` (or it never
@@ -662,12 +700,14 @@ pub fn save(session: &Arc<CanvasSession>, ui: &mut Interface, ask: bool) {
     let path = match ui.path.clone().filter(|_| !ask) {
         Some(p) => p,
         None => {
-            let Some(p) = FileDialog::new()
-                .set_title("Save")
-                .add_filter("ProCraft artwork", &["procraft"])
-                .set_file_name(format!("{}.procraft", session.name()))
-                .save_file()
-            else {
+            let picked = crate::platform::pick(
+                crate::platform::Picked::default()
+                    .title("Save")
+                    .filter("ProCraft artwork", &["procraft"])
+                    .name(format!("{}.procraft", session.name()))
+                    .saving(),
+            );
+            let Some(p) = picked.into_iter().next() else {
                 return;
             };
             with_extension(p, "procraft")
@@ -699,7 +739,7 @@ pub fn export(
     if matches!(format, Format::LayerPngs | Format::ChosenLayerPngs | Format::ModelTextures) {
         let title =
             if format == Format::ModelTextures { "Share textures as PNG files" } else { "Share layers as PNG files" };
-        let Some(dir) = FileDialog::new().set_title(title).pick_folder() else { return };
+        let Some(dir) = crate::platform::pick(crate::platform::Picked::default().title(title).folders()).into_iter().next() else { return };
         let dir = dir.to_string_lossy().into_owned();
         writing(session, card, "Can't share", move |session| {
             match format {
@@ -711,12 +751,14 @@ pub fn export(
         });
         return;
     }
-    let Some(path) = FileDialog::new()
-        .set_title(format!("Export {}", format.name()))
-        .add_filter(format.name(), &[format.extension()])
-        .set_file_name(format!("{}.{}", export_file_name(session.name(), format.package()), format.extension()))
-        .save_file()
-    else {
+    let picked = crate::platform::pick(
+        crate::platform::Picked::default()
+            .title(format!("Export {}", format.name()))
+            .filter(format.name(), &[format.extension()])
+            .name(format!("{}.{}", export_file_name(session.name(), format.package()), format.extension()))
+            .saving(),
+    );
+    let Some(path) = picked.into_iter().next() else {
         return;
     };
     let path = with_extension(path, format.extension());
@@ -810,17 +852,21 @@ pub fn share_artworks(
     let extension = format.extension();
     let file_name = |name: &str| export_file_name(name.to_owned(), false);
     let targets: Vec<(procraft_core::GalleryArtwork, PathBuf)> = if let [one] = list {
-        let Some(path) = FileDialog::new()
-            .set_title(format!("Share {}", format.name()))
-            .add_filter(format.name(), &[extension])
-            .set_file_name(format!("{}.{extension}", file_name(&one.name)))
-            .save_file()
-        else {
+        let picked = crate::platform::pick(
+            crate::platform::Picked::default()
+                .title(format!("Share {}", format.name()))
+                .filter(format.name(), &[extension])
+                .name(format!("{}.{extension}", file_name(&one.name)))
+                .saving(),
+        );
+        let Some(path) = picked.into_iter().next() else {
             return;
         };
         vec![(one.clone(), with_extension(path, extension))]
     } else {
-        let Some(dir) = FileDialog::new().set_title(format!("Share as {}", format.name())).pick_folder() else {
+        let Some(dir) =
+            crate::platform::pick(crate::platform::Picked::default().title(format!("Share as {}", format.name())).folders()).into_iter().next()
+        else {
             return;
         };
         let mut used = std::collections::HashSet::new();

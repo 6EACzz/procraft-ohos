@@ -68,7 +68,7 @@ pub enum Ended {
 }
 
 struct Run {
-    progress: Box<dyn Fn() -> f32>,
+    progress: Box<dyn Fn() -> f32 + Send>,
     exporting: Exporting,
     since: Instant,
     made: Option<Instant>,
@@ -83,7 +83,7 @@ pub struct ExportCard {
 impl ExportCard {
     /// Shows the card for an export whose progress (0..1) `progress` tells; its thread is handed
     /// the [`Exporting`] to read Cancel from and to end it by.
-    pub fn start(&mut self, progress: impl Fn() -> f32 + 'static) -> Exporting {
+    pub fn start(&mut self, progress: impl Fn() -> f32 + Send + 'static) -> Exporting {
         let exporting = Exporting { cancel: Arc::new(AtomicBool::new(false)), made: Arc::new(AtomicU8::new(RUNNING)) };
         self.run = Some(Run {
             progress: Box::new(progress),

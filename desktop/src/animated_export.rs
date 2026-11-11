@@ -725,12 +725,14 @@ fn file_size(bytes: u64) -> String {
 /// The file made copied where the person picks; true once saved (false if they cancelled).
 fn save_as(made: &std::path::Path, format: Animated) -> bool {
     let name = made.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let Some(to) = rfd::FileDialog::new()
-        .set_title(format!("Share as {}", format.title()))
-        .set_file_name(name)
-        .add_filter(format.title(), &[format.extension()])
-        .save_file()
-    else {
+    let picked = crate::platform::pick(
+        crate::platform::Picked::default()
+            .title(format!("Share as {}", format.title()))
+            .name(name)
+            .filter(format.title(), &[format.extension()])
+            .saving(),
+    );
+    let Some(to) = picked.into_iter().next() else {
         return false;
     };
     match std::fs::copy(made, &to) {

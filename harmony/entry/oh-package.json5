@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "ProCraft for HarmonyOS",
+  "main": "",
+  "author": "artcraft-android",
+  "license": "MIT OR Apache-2.0",
+  "dependencies": {
+    "libprocraft.so": "file:./src/main/cpp/types/libprocraft_napi"
+  }
+}

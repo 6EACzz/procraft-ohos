@@ -202,6 +202,12 @@ pub static INTER_FACES: [(Weight, &[u8]); 4] = [
 /// lacks, and the system's behind those for other scripts (read on a thread of their own, put in
 /// once read).
 pub fn install_fonts(ctx: &egui::Context) {
+    // once for each context: the system's are tens of megabytes read off the disk, and this is
+    // called wherever a context is made (the app's once, a test's each time)
+    let installed = egui::Id::new("procraft fonts installed");
+    if ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or(installed, false), true)) {
+        return;
+    }
     ctx.set_fonts(fonts(Vec::new()));
     let ctx = ctx.clone();
     std::thread::spawn(move || {
@@ -299,7 +305,40 @@ mod core_text {
 /// The system's fonts for the scripts Inter and egui's own lack (Chinese, Japanese, Korean,
 /// Arabic, Hebrew, Indic, Thai, ...), those of them it has: names (a brush's from another app,
 /// an artwork's typed in any language) shown as written. `(name, font)` each.
-#[cfg(not(target_os = "macos"))]
+///
+/// On the tablet the system's fonts are under `/system/fonts`, where the app may read them (its
+/// sandbox is let near `/system`, though a shell on the device is not). HarmonyOS's own face for
+/// Chinese is the nicest of them and the one the system itself shows; Noto's is kept behind it
+/// for the scripts HarmonyOS's doesn't cover.
+#[cfg(target_env = "ohos")]
+fn system_fonts() -> Vec<(String, egui::FontData)> {
+    const DIR: &str = "/system/fonts";
+    /// Files to read, in the order their glyphs are tried (the first of a script wins).
+    const FILES: [&str; 6] = [
+        // the system's own face, Chinese (simplified and traditional in one)
+        "HarmonyOS_Sans_SC.ttf",
+        // Chinese, Japanese and Korean in one, and the Arabic, Hebrew, Indic and Thai families
+        // beside it: the faces HarmonyOS's Sans leaves out
+        "NotoSansCJK-Regular.ttc",
+        "NotoSansArabic-Regular.ttf",
+        "NotoSansHebrew-Regular.ttf",
+        "NotoSansDevanagari-Regular.ttf",
+        "NotoSansThai-Regular.ttf",
+    ];
+    FILES
+        .iter()
+        .filter_map(|file| {
+            let bytes = std::fs::read(std::path::Path::new(DIR).join(file)).ok()?;
+            // a collection's first face (CJK's regular is first, the others are single faces)
+            Some((format!("system {file}"), egui::FontData::from_owned(bytes)))
+        })
+        .collect()
+}
+
+/// The system's fonts for the scripts Inter and egui's own lack (Chinese, Japanese, Korean,
+/// Arabic, Hebrew, Indic, Thai, ...), those of them it has: names (a brush's from another app,
+/// an artwork's typed in any language) shown as written. `(name, font)` each.
+#[cfg(all(not(target_os = "macos"), not(target_env = "ohos")))]
 fn system_fonts() -> Vec<(String, egui::FontData)> {
     #[cfg(windows)]
     let (dir, files): (std::path::PathBuf, &[&str]) = (

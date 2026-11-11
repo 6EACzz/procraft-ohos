@@ -1,0 +1,6 @@
+{
+  "name": "libprocraft.so",
+  "types": "./index.d.ts",
+  "version": "0.1.0",
+  "description": "ProCraft's own surface and what the system gives it"
+}

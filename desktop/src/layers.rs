@@ -727,7 +727,7 @@ impl Layers {
         self.mesh_slid.insert(index, slide);
         if slide < 0.0 {
             let rect = Rect::from_min_max(pos2(place.right() - SWIPE_BUTTON, place.top()), place.max);
-            let label = if locked { "Unlock" } else { "Lock" };
+            let label = crate::lang::tr(if locked { "Unlock" } else { "Lock" });
             ui.painter().rect_filled(rect, 8, argb(SWIPE_FILL));
             text(ui.painter(), rect.center(), Align2::CENTER_CENTER, label, 15.0, Weight::Medium, argb(SWIPE_INK));
             if ui.interact(rect, ui.scope_id().with(("mesh lock", index)), Sense::click()).clicked() {
@@ -781,7 +781,10 @@ impl Layers {
 
     /// Layer `id`'s content in `channel` replaced by a picture chosen now.
     fn replace_map(&mut self, session: &CanvasSession, colours: &mut Colours, id: u64, channel: u32) {
-        let Some(path) = rfd::FileDialog::new().set_title("Replace Material Map Content").pick_file() else { return };
+        let Some(path) = crate::platform::pick(crate::platform::Picked::default().title("Replace Material Map Content")).into_iter().next()
+        else {
+            return;
+        };
         let Ok(picture) = image::open(&path) else {
             self.notice = Some(("This picture can't be opened.".to_owned(), true));
             return;
@@ -1334,7 +1337,15 @@ impl Layers {
         let left = rect.left() + 13.0;
         let right = rect.right() - 13.0;
         let y = rect.top() + 22.0 + 23.0 / 2.0;
-        text(ui.painter(), pos2(left, y), Align2::LEFT_CENTER, "Opacity", 17.0, Weight::Regular, ink);
+        text(
+            ui.painter(),
+            pos2(left, y),
+            Align2::LEFT_CENTER,
+            crate::lang::tr("Opacity"),
+            17.0,
+            Weight::Regular,
+            ink,
+        );
         let reading =
             if l.opacity >= 0.995 { "Max".to_owned() } else { format!("{}%", (l.opacity * 100.0).round() as i32) };
         text(ui.painter(), pos2(right, y), Align2::RIGHT_CENTER, &reading, 17.0, Weight::Regular, ink);

@@ -295,7 +295,13 @@ impl Default for Interface {
             keep_brushes: false,
             tool_hold_acted: false,
             brushes_were_open: false,
-            prefs: crate::prefs::Prefs::kept(),
+            prefs: {
+                // the interface's language shows from the first frame, the gallery's too (no
+                // canvas is open then for `Prefs::apply` to say it)
+                let prefs = crate::prefs::Prefs::kept();
+                crate::lang::set_language(prefs.language);
+                prefs
+            },
             side_bar_shown: true,
             licences: false,
             shortcut_list: Default::default(),
@@ -1548,10 +1554,11 @@ impl Interface {
     /// do.
     fn insert_picture(&mut self, session: &Arc<CanvasSession>, photo: bool, private: bool) {
         let title = if photo { "Insert a photo" } else { "Insert a file" };
-        let Some(path) = rfd::FileDialog::new()
-            .set_title(title)
-            .add_filter("Pictures and videos", &[&PICTURES[..], &VIDEOS[..]].concat())
-            .pick_file()
+        let Some(path) = crate::platform::pick(
+            crate::platform::Picked::default().title(title).filter("Pictures and videos", &[&PICTURES[..], &VIDEOS[..]].concat()),
+        )
+        .into_iter()
+        .next()
         else {
             return;
         };

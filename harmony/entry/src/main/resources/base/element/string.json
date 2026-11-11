@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "ProCraft Module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "ProCraft Entry Ability"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "ProCraft"
+    }
+  ]
+}

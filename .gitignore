@@ -10,3 +10,11 @@ replay_pid*.log
 # (XcodeGen)
 /ios/Generated/
 /ios/ProCraft.xcodeproj/
+harmony/entry/build/
+harmony/entry/.preview/
+harmony/entry/oh_modules/
+harmony/oh_modules/
+harmony/.hvigor/
+harmony/hvigor/hvigor-cache/
+harmony/entry/libs/arm64-v8a/*.so
+.cargo/
