@@ -450,6 +450,50 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
     var pluginList by mutableStateOf(plugins.plugins())
         private set
 
+    /** Whether a plugin draws in-betweens (the frame options then offer In-between). */
+    var tweensOn by mutableStateOf(false)
+        private set
+
+    // the interface's accent as the plugins give it
+    init { followPluginLooks() }
+
+    /** What the plugins change in how the interface looks: its accent, Classic's triangle; and whether strokes are heard. */
+    private fun followPluginLooks() {
+        io.github.artcraftandroid.procraft.ui.Pc.accentGiven = io.github.artcraftandroid.procraft.ui.Pc.accentOf(plugins)
+        io.github.artcraftandroid.procraft.ui.Pc.colourTriangle = plugins.colourTriangle()
+        io.github.artcraftandroid.procraft.ui.Pc.picker = if (plugins.pickerOn()) {
+            io.github.artcraftandroid.procraft.ui.ClassicPicker(
+                pick = { x, y -> plugins.pickerPick(x, y) },
+                point = { s, v -> plugins.pickerPoint(s, v) },
+                picture = { hue, n -> session?.pickerPicture(hue, n.toUInt()) },
+            )
+        } else {
+            null
+        }
+        tweensOn = plugins.tweens()
+        followStrokeSound()
+    }
+
+    /** The strokes' sound (a plugin's), played while an artwork is open and the app in front. */
+    private val strokeSound = StrokeSound()
+
+    /** Whether the app is in front (started), for the strokes' sound. */
+    private var inFront = true
+
+    /** Plays the open artwork's strokes while a plugin makes their sound and the app is in front. */
+    private fun followStrokeSound() {
+        // set up before the session is, the first time
+        @Suppress("SENSELESS_COMPARISON")
+        if (strokeSound == null) return
+        strokeSound.follow(session?.takeIf { inFront && screen == Screen.CANVAS }, plugins.makesStrokeSound())
+    }
+
+    /** The app came to the front ([front]) or went behind: the strokes' sound follows. */
+    fun appInFront(front: Boolean) {
+        inFront = front
+        followStrokeSound()
+    }
+
     /** How big the interface shows now, as a plugin says (1: as measured). */
     var interfaceShown = 1f
         private set
@@ -554,6 +598,40 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         pluginsChanged()
     }
 
+    /** A plugin's action [key] run on the artwork, off the main thread (it may take seconds): the panel closes so what it does shows, and what it says, or its stopping, is told. */
+    fun runPluginAction(key: String) {
+        val s = session ?: return
+        closePanels()
+        viewModelScope.launch {
+            withContext(Dispatchers.Default) { plugins.runAction(key, s) }
+            pluginPanel = plugins.panel()
+            s.takeFailure()?.let { showNotice(it) }
+            readPlugins()
+            refresh()
+        }
+    }
+
+    /** The panel a plugin's action showed, while it is open. */
+    var pluginPanel by mutableStateOf<io.github.artcraftandroid.procraft.core.PluginPanel?>(null)
+        private set
+
+    /** Row [row] of the plugin's panel touched with [value]: told to the plugin off the main thread, and the panel shown as it answers (or closed). */
+    fun touchPluginPanel(row: Int, value: Float) {
+        val s = session ?: return
+        viewModelScope.launch {
+            withContext(Dispatchers.Default) { plugins.panelTouched(row.toUInt(), value, s) }
+            pluginPanel = plugins.panel()
+            s.takeFailure()?.let { showNotice(it) }
+            readPlugins()
+            refresh()
+        }
+    }
+
+    fun closePluginPanel() {
+        plugins.closePanel()
+        pluginPanel = null
+    }
+
     /** A plugin's switch flipped; a key no control has changes nothing. */
     fun setPluginSwitch(key: String, on: Boolean) {
         if (!plugins.setSwitch(key, on)) return
@@ -570,9 +648,26 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         pluginsChanged()
     }
 
+    /** A sound picked at [uri] for a plugin's file control [key]: read in the background (any sound Android can play, a minute of it at most), then kept with the plugin; told if it can't be used. */
+    fun pickPluginSound(key: String, uri: android.net.Uri) {
+        viewModelScope.launch {
+            val kept = withContext(Dispatchers.IO) {
+                val wav = decodedSound(getApplication(), uri) ?: return@withContext false
+                plugins.setSoundFile(key, fileName(uri) ?: "Recording", wav)
+            }
+            if (kept) pluginsChanged() else message = "This sound couldn't be used."
+        }
+    }
+
+    /** A plugin's file control [key] lets its file go. */
+    fun clearPluginFile(key: String) {
+        if (plugins.clearFile(key)) pluginsChanged()
+    }
+
     /** The list as it stands: a plugin may have stopped on a stroke since it was read. */
     fun readPlugins() {
         pluginList = plugins.plugins()
+        followPluginLooks()
     }
 
     /** What the plugins do now; one nothing answers to does nothing. */
@@ -1066,6 +1161,8 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         refreshGallery()
         // the GPU made while the gallery shows, so the first artwork opens at once
         viewModelScope.launch(Dispatchers.Default) { io.github.artcraftandroid.procraft.core.warmGpu() }
+        // and the brushes read (with many imported, reading them took seconds at each open)
+        viewModelScope.launch(Dispatchers.IO) { io.github.artcraftandroid.procraft.core.prepareBrushes(brushesDir.path) }
     }
 
     // ---- gallery ----
@@ -1193,18 +1290,28 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         io.github.artcraftandroid.procraft.core.layersFor(width.coerceAtLeast(1).toUInt(), height.coerceAtLeast(1).toUInt())
             .coerceAtMost(Int.MAX_VALUE.toUInt()).toInt()
 
-    /** A new artwork of `width` × `height` pixels (the screen's size), in Display P3, opened on the canvas. */
-    fun newArtwork(width: Int, height: Int) {
+    /** A new artwork of `width` × `height` pixels (the screen's size), in Display P3, opened on the canvas; of a plugin's [kind] (`<id>.<key>`), its plugin keeping it. */
+    fun newArtwork(width: Int, height: Int, kind: String? = null) {
         if (opening || session != null) return
         opening = true
         viewModelScope.launch {
             val s = withContext(Dispatchers.IO) {
-                CanvasSession(width.coerceAtLeast(1).toUInt(), height.coerceAtLeast(1).toUInt()).also {
+                val made = CanvasSession(width.coerceAtLeast(1).toUInt(), height.coerceAtLeast(1).toUInt()).also {
                     it.setNewProfile(io.github.artcraftandroid.procraft.gallery.CanvasPreset.P3)
                     loadBrushes(it)
                 }
+                if (kind == null) {
+                    made
+                } else {
+                    val canvas = plugins.openCanvas(kind, width.coerceAtLeast(1).toUInt(), height.coerceAtLeast(1).toUInt(), null)
+                    made.takeIf { canvas != null && it.attachPluginCanvas(kind, canvas) }
+                }
             }
             opening = false
+            if (s == null) {
+                message = "The plugin couldn't make this artwork."
+                return@launch
+            }
             start(s, store.newFolder(galleryDir), brushesLoaded = true)
             startedNew()
         }
@@ -2150,7 +2257,15 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         opening = true
         val cell = thumbAt[a.dir.name]
         viewModelScope.launch {
-            val s = withContext(Dispatchers.IO) { runCatching { CanvasSession.open(a.dir.path).also(::loadBrushes) } }
+            val s = withContext(Dispatchers.IO) {
+                runCatching {
+                    CanvasSession.open(a.dir.path).also {
+                        loadBrushes(it)
+                        // a plugin's own artwork goes to its plugin (on); else it shows what it last drew
+                        if (it.pluginKind() != null) it.openPluginArtwork(plugins)
+                    }
+                }
+            }
             opening = false
             s.onSuccess {
                 if (!orientationMemory) it.forgetSavedView()
@@ -2278,6 +2393,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         val s = session ?: return
         noteTime()
         keepChoices(s)
+        strokeSound.follow(null, false)
         s.detachProjection()
         val dir = artworkDir
         // the gallery zooms out of the artwork's cell, the canvas fading away over it
@@ -2291,6 +2407,8 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
             GalleryZoom(c, canvasRect(s, s.viewMatrix()), opening = false, picture = picture)
         }
         keepColour()
+        // a plugin's panel goes with the artwork it was open over
+        closePluginPanel()
         val lapse = timeLapse
         session = null
         artworkDir = null
@@ -2583,6 +2701,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         applyFitInsets()
         attachProjection()
         activeSince = android.os.SystemClock.elapsedRealtime()
+        followStrokeSound()
         thumbnails.clear()
         thumbnailVersions.clear()
         previews.clear()
@@ -3342,6 +3461,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         QuickShapeKind.LINE -> "a line"
         QuickShapeKind.POLYLINE -> "a polyline"
         QuickShapeKind.ARC -> "an arc"
+        QuickShapeKind.CURVE -> "a curve"
         QuickShapeKind.ELLIPSE -> "an ellipse"
         QuickShapeKind.CIRCLE -> "a circle"
         QuickShapeKind.TRIANGLE -> "a triangle"
@@ -3516,6 +3636,8 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
                     val shot = s.timeLapseFrame(t.settings.side.toUInt()) ?: return@withContext
                     t.record(shot.rgba, shot.width.toInt(), shot.height.toInt())
                 }
+                // one that couldn't be kept (the storage full) is told once
+                t.takeProblem()?.let { message = it }
             } while (frameStale)
             timeLapseRecorded = t.count > 0
         }
@@ -4217,7 +4339,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         val name = (if (undo) s.textBoxUndo() else s.textBoxRedo()) ?: return false
         s.editingText()?.let(s::layerText)?.let { textInfo = it }
         renderText()
-        showNotice((if (undo) "Undo " else "Redo ") + name)
+        s.stepNotice(undo, name)?.let { showNotice(it) }
         refresh()
         return true
     }
@@ -4728,7 +4850,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
             libraryFailing = false
         } else if (!libraryFailing) {
             libraryFailing = true
-            message = "The brush library couldn't be kept."
+            message = "The brush library couldn't be kept. The storage may be full."
         }
     }
 
@@ -4742,6 +4864,10 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
     // the brush studio
 
     fun studio(key: String): Float = studioValues[key] ?: 0f
+
+    /** The rows the plugins that are on add to the brush studio, kept with each brush. */
+    fun pluginBrushControls(): List<io.github.artcraftandroid.procraft.core.PluginBrushControl> =
+        pluginList.filter { it.on && it.problem == null }.flatMap { it.brushControls }
 
     /** The studio's brush is a dual brush, and its second part shows. */
     var studioDual by mutableStateOf(false)
@@ -4818,7 +4944,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun readStudio() {
         val s = session ?: return
-        val keys = io.github.artcraftandroid.procraft.ui.STUDIO_KEYS
+        val keys = io.github.artcraftandroid.procraft.ui.STUDIO_KEYS + pluginBrushControls().map { it.key }
         s.studioSettings(keys).forEachIndexed { i, v -> studioValues[keys[i]] = v }
         studioCurve = s.studioCurve().chunked(2).filter { it.size == 2 }.map { Offset(it[0], it[1]) }
         readStudioSources()
@@ -4950,7 +5076,23 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A picture from elsewhere as a source image; none if it can't be read. */
-    suspend fun decodeSource(uri: android.net.Uri): ByteArray? {
+    suspend fun decodeSource(uri: android.net.Uri): ByteArray? = sourceOrSay("importing a picture into a source editor") { decodedSource(uri) }
+
+    /**
+     * What [make] gives, or none if it fails in any way (running out of memory too): the editor
+     * says so and stays open rather than the app closing.
+     */
+    private suspend fun sourceOrSay(doing: String, make: suspend () -> ByteArray?): ByteArray? = try {
+        make()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Log.e(TAG, doing, e)
+        message = "This picture couldn't be used."
+        null
+    }
+
+    private suspend fun decodedSource(uri: android.net.Uri): ByteArray? {
         val bitmap = withContext(Dispatchers.IO) {
             runCatching {
                 val resolver = getApplication<Application>().contentResolver
@@ -4969,7 +5111,9 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A picture on the clipboard as a source image; none if there isn't one. */
-    suspend fun pastedSource(): ByteArray? {
+    suspend fun pastedSource(): ByteArray? = sourceOrSay("pasting into a source editor") { clipboardSource() }
+
+    private suspend fun clipboardSource(): ByteArray? {
         val clip = systemClipboard?.primaryClip?.takeIf { it.itemCount > 0 }
         val uri = clip?.getItemAt(0)?.uri
         // what was cut or copied here, unless another app's picture went on the clipboard since
@@ -4982,7 +5126,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
             message = "There's no picture to paste."
             return null
         }
-        return decodeSource(uri)
+        return decodedSource(uri)
     }
 
     /** The editor's tick: the studio brush's [kind] of source becomes [pixels], or shipped image [shipped]. */
@@ -5064,6 +5208,21 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         studioCurve = points
         session?.setStudioCurve(points.flatMap { listOf(it.x, it.y) })
         refreshStudioPreview()
+        syncPad()
+    }
+
+    /** Whether a plugin sets brushes at random: the studio shows Randomise. */
+    val randomisesBrushes: Boolean
+        get() {
+            // read again as the plugins change
+            pluginList
+            return plugins.randomisesBrushes()
+        }
+
+    /** The studio's brush set at random, as a plugin says. */
+    fun randomiseStudio() {
+        if (session?.studioRandomise() != true) return
+        readStudio()
         syncPad()
     }
 
@@ -5342,6 +5501,8 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         MODEL_RENDER("png", "image/png"),
         MODEL_JPEG("jpg", "image/jpeg"),
         MODEL_TIFF("tif", "image/tiff"),
+        /** A plugin's artwork, its shapes kept. */
+        SVG("svg", "image/svg+xml"),
     }
 
     /**
@@ -5408,6 +5569,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
                     Export.MODEL_RENDER -> s.exportModelRender(file.path, false)
                     Export.MODEL_JPEG -> s.exportModelJpeg(file.path)
                     Export.MODEL_TIFF -> s.exportModelTiff(file.path)
+                    Export.SVG -> s.exportSvg(file.path)
                     Export.MODEL_TEXTURES -> {
                         val folder = File(dir, base).apply { deleteRecursively(); mkdirs() }
                         return@withContext s.exportModelTextures(folder.path).map { File(it) }
@@ -5848,7 +6010,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         // recoloring, the core takes the fill under the reticle back first (after the fills queued)
         val could = canUndo
         val name = session?.let { s -> if (recoloring) pourNow { s.undo() } else s.undo() }
-        if (could || name != null) showNotice("Undo" + name?.let { " $it" }.orEmpty())
+        if (could || name != null) session?.stepNotice(true, name)?.let { showNotice(it) }
         followQuickShape()
         // a model's tile chosen before comes back, with its channel's colour
         if (modelOpen) {
@@ -5897,7 +6059,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         val text = if (!editing) session?.textRedoLayer() else null
         // recoloring, the core steps the open fill aside and makes it again over what comes back
         val name = session?.let { s -> if (recoloring) pourNow { s.redo() } else s.redo() }
-        if (could) showNotice("Redo" + name?.let { " $it" }.orEmpty())
+        if (could) session?.stepNotice(false, name)?.let { showNotice(it) }
         followQuickShape()
         if (modelOpen) followModelChannel()
         refresh()
@@ -7176,6 +7338,25 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         if (held > 0) layerChange { if (it.splitHeldFrame(layer.id, held.toUInt()) == null) message = noRoom() } else duplicate(layer)
     }
 
+    /** A plugin's In-between: a frame drawn between this frame and the next by the plugin (off the main thread: it takes a moment), made current. */
+    fun addInbetween() {
+        frameOptionsOpen = false
+        val layer = currentFrameLayer() ?: return
+        val s = session ?: return
+        viewModelScope.launch {
+            val made = withContext(Dispatchers.Default) { s.addInbetween(layer.id) }
+            if (made == null) message = "An in-between goes between two frames of one layer each, with something drawn." else layerChange { }
+        }
+    }
+
+    /** A plugin's action [key] from the frame options, run with that frame's layer current. */
+    fun runFrameAction(key: String) {
+        frameOptionsOpen = false
+        val layer = currentFrameLayer() ?: return
+        session?.selectLayer(layer.id)
+        runPluginAction(key)
+    }
+
     /** The frame deleted; on a held place it is held one frame less. */
     fun deleteFrame() {
         frameOptionsOpen = false
@@ -7514,6 +7695,7 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        strokeSound.follow(null, false)
         saveNow()
         session?.stopAutosave()
         session = null
@@ -7631,8 +7813,8 @@ class CanvasViewModel(app: Application) : AndroidViewModel(app) {
         /** Brush and brush set files, as other painting apps share them. */
         const val BRUSH_EXTENSION = "brush"
         const val BRUSH_SET_EXTENSION = "brushset"
-        /** Other apps' brush files: Photoshop's, GIMP's brushes, pipes and generated brushes, Krita's presets and bundles, Clip Studio's sub tools. */
-        val OTHER_BRUSH_EXTENSIONS = listOf("abr", "gbr", "gih", "vbr", "kpp", "bundle", "sut")
+        /** Other apps' brush files: Photoshop's, GIMP's brushes, pipes and generated brushes, Krita's presets and bundles, Clip Studio's sub tools and their groups. */
+        val OTHER_BRUSH_EXTENSIONS = listOf("abr", "gbr", "gih", "vbr", "kpp", "bundle", "sut", "sutg")
         val PACKAGE_LABEL = PACKAGE_EXTENSION.replaceFirstChar(Char::titlecase)
 
         /** What the gallery's Share offers, in order: still pictures, then animations. */

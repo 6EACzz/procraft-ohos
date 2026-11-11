@@ -56,6 +56,7 @@ mod shortcuts;
 mod sound;
 mod source_editor;
 mod startup;
+mod stroke_sound;
 mod studio;
 mod system_clipboard;
 mod text;
@@ -254,6 +255,7 @@ fn main() {
         last_frame: Instant::now(),
         again: None,
         finishing_since: None,
+        stroke_sound: stroke_sound::StrokeSound::default(),
         opening: None,
         importing: None,
         reading_artwork: None,
@@ -273,6 +275,7 @@ fn main() {
         // the gallery does
         dropped: std::env::args_os().skip(1).map(std::path::PathBuf::from).filter(|p| p.is_file()).collect(),
         tap_held: None,
+        interface_touches: input::InterfaceTouches::default(),
         closed: false,
     };
     // a panic on the window's thread ends the app: said, rather than the window just vanishing
@@ -301,6 +304,8 @@ struct App {
     again: Option<Instant>,
     /// Since when a plugin has been finishing a fill.
     finishing_since: Option<Instant>,
+    /// The strokes' sound, played while a plugin makes it.
+    stroke_sound: stroke_sound::StrokeSound,
     /// An artwork's canvas being made on a thread of its own as it opens, and since when.
     opening: Option<(Instant, std::thread::JoinHandle<()>)>,
     /// Artworks being brought in, read on a thread of their own one after another.
@@ -333,6 +338,8 @@ struct App {
     dropped: Vec<std::path::PathBuf>,
     /// Tap Assistance: a lone finger's touch, where it landed and when, while it is held there.
     tap_held: Option<(u64, winit::dpi::PhysicalPosition<f64>, Instant)>,
+    /// Which touch the interface follows: a finger on it beside a hand resting on the canvas.
+    interface_touches: input::InterfaceTouches,
     /// The window was closed (the artwork open kept): the app's end needs nothing more.
     closed: bool,
 }
@@ -380,6 +387,11 @@ impl ApplicationHandler for App {
         };
         // a pen's lean, which winit's touches leave out (on Wayland the whole pen)
         pen::watch(&window, self.wake.clone());
+        // the brushes read while the gallery shows, so the first artwork opens without reading them
+        let read = std::thread::Builder::new().name("procraft-read-brushes".to_owned());
+        if let Err(e) = read.spawn(|| procraft_core::prepare_brushes(files::brushes_dir())) {
+            log::warn!("reading the brushes ahead: {e}");
+        }
         // in this machine's order, from the backend the last run used, or the next if that one
         // was at risk when it stopped
         let order = startup::backend_order();
@@ -427,7 +439,15 @@ impl ApplicationHandler for App {
         // the system's clipboard
         let canvas_keys = session.is_some() && !screen.egui.egui_ctx().egui_wants_keyboard_input();
         screen.egui.set_clipboard_shortcuts(!canvas_keys);
-        let response = screen.egui.on_window_event(&screen.window, &event);
+        // a finger landing on the interface while a hand rests on the canvas takes the pointer over
+        let canvas = self.ui.canvas_rect;
+        let heard = self.interface_touches.route(event.clone(), |p| screen.over_interface(p, canvas));
+        let mut response = egui_winit::EventResponse { consumed: false, repaint: false };
+        for each in &heard {
+            let one = screen.egui.on_window_event(&screen.window, each);
+            response.consumed |= one.consumed;
+            response.repaint |= one.repaint;
+        }
         // egui counts every redraw as wanting another; the frames it does want come from its
         // repaint delay, paced in `about_to_wait`
         if response.repaint && event != WindowEvent::RedrawRequested {
@@ -606,7 +626,7 @@ impl App {
         self.opening = Some((Instant::now(), std::thread::spawn(move || opened.use_gpu(gpu))));
         // the brushes as the last artwork left them
         if let Some(last) = &self.session {
-            last.keep_brushes(files::brushes_dir());
+            files::keep_brushes(last);
         }
         session.open_brushes(files::brushes_dir());
         self.ui.opened(&session, scale * screen.egui.egui_ctx().zoom_factor());
@@ -703,6 +723,8 @@ impl App {
         // a canvas opening while the pipelines are still being made waits for them: it says so
         let opening = opening_words(self.opening.is_some() && screen.canvases_waited().is_some());
         screen.size_interface(self.ui.plugins(), Some(session.as_ref()));
+        // the strokes heard while a plugin makes their sound
+        self.stroke_sound.follow(Some(&session), self.ui.plugins().makes_stroke_sound());
         let raw = screen.egui.take_egui_input(&screen.window);
         let output = screen.egui.egui_ctx().clone().run_ui(raw, |ui| {
             self.ui.show(ui, &session, &mut self.input);
@@ -749,7 +771,14 @@ impl App {
             p.draw(&screen.gpu, Some(&session));
         }
         if std::mem::take(&mut self.ui.keep_brushes) {
-            session.keep_brushes(files::brushes_dir());
+            // off the window's thread: a library with many brushes brought in is tens of megabytes
+            // when something in it changed (a brush chosen only writes the choices)
+            let kept = Arc::clone(&session);
+            let thread = std::thread::Builder::new().name("procraft-keep-brushes".to_owned());
+            if let Err(e) = thread.spawn(move || files::keep_brushes(&kept)) {
+                log::warn!("keeping the brushes on a thread of their own: {e}");
+                files::keep_brushes(&session);
+            }
         }
         for action in std::mem::take(&mut self.ui.actions) {
             self.act(action, &session);
@@ -761,6 +790,7 @@ impl App {
         let Some(screen) = self.screen.as_mut() else { return };
         self.last_frame = Instant::now();
         screen.size_interface(self.ui.plugins(), None);
+        self.stroke_sound.follow(None, false);
         let raw = screen.egui.take_egui_input(&screen.window);
         let mut asked = None;
         let (gallery, interface) = (&mut self.gallery, &mut self.ui);
@@ -785,6 +815,8 @@ impl App {
                 Some(zoom) => zoom.over_gallery(ui.ctx()),
                 None => zoom::Zoom::end(ui.ctx()),
             }
+            // the New canvas list offers the kinds of artwork the plugins on make
+            gallery.kinds = interface.plugins().kinds();
             asked = gallery.show(ui.ctx(), &mut interface.look, &interface.colours);
             // a pen's buttons do nothing here, and nothing in the artwork opened next either
             crate::pen::take_button_presses();
@@ -845,6 +877,24 @@ impl App {
                     let dir = self.gallery.store.new_folder(folder);
                     self.open_artwork(session, dir);
                     self.ui.started_new();
+                }
+            }
+            // a plugin's kind of artwork, the screen's size, its plugin keeping it
+            Some(gallery::Asked::PluginKind(kind, folder)) => {
+                let (w, h) = self.gallery.screen_px;
+                let canvas = self.ui.plugins_shared().open_canvas(kind.clone(), w, h, None);
+                match canvas {
+                    Some(canvas) if !busy => {
+                        let session = CanvasSession::new(w, h);
+                        session.set_new_profile(procraft_core::P3.into());
+                        if session.attach_plugin_canvas(kind, canvas) {
+                            let dir = self.gallery.store.new_folder(folder);
+                            self.open_artwork(session, dir);
+                            self.ui.started_new();
+                        }
+                    }
+                    Some(_) => {}
+                    None => files::say("The plugin couldn't make this artwork."),
                 }
             }
             Some(gallery::Asked::Share(list, format)) => {
@@ -937,6 +987,10 @@ impl App {
     }
 
     fn open_artwork(&mut self, session: Arc<CanvasSession>, dir: String) {
+        // a plugin's own artwork goes to its plugin (on); else it shows what it last drew
+        if session.plugin_kind().is_some() && !session.open_plugin_artwork(self.ui.plugins_shared()) {
+            log::warn!("an artwork of a plugin's that isn't on opened as what it last drew");
+        }
         self.ui.artwork_dir = Some(dir.clone());
         // kept saved as it changes, as the tablet's
         Arc::clone(&session).start_autosave(dir.clone());
@@ -1257,7 +1311,7 @@ impl App {
         if let Some((_, made)) = self.opening.take() {
             let _ = made.join();
         }
-        session.keep_brushes(files::brushes_dir());
+        files::keep_brushes(&session);
         let (brush, mask) = self.ui.colours.brush_and_mask();
         files::keep_colours(brush, mask);
         let edits = session.edits();

@@ -2,6 +2,7 @@ package io.github.artcraftandroid.procraft
 
 import android.graphics.Color
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -44,7 +45,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // text's fonts given to the core, off the main thread
         io.github.artcraftandroid.procraft.canvas.TextRenderer.prepare(assets, java.io.File(filesDir, "fonts"))
-        window.isNavigationBarContrastEnforced = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
         // wide colour, so a Display P3 canvas's colours show as they are around it too
         if (resources.configuration.isScreenWideColorGamut) window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_WIDE_COLOR_GAMUT
         hideSystemBars()
@@ -101,12 +102,14 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         vm.readAppSettings()
         vm.resumeTracking()
+        vm.appInFront(true)
         displays.registerDisplayListener(displayListener, null)
         showProjection()
     }
 
     override fun onStop() {
         super.onStop()
+        vm.appInFront(false)
         vm.saveNow()
         displays.unregisterDisplayListener(displayListener)
         projection?.dismiss()

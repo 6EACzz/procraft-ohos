@@ -346,6 +346,10 @@ impl Brush {
             "shape_filtering" | "grain_filtering" | "cursor_outline" | "hover_fill" | "relative_to_stroke" => {
                 self.extra.insert(key.to_owned(), value.round().clamp(0.0, 2.0));
             }
+            // a plugin's row: a choice, by its place
+            _ if key.starts_with("plugin:") => {
+                self.extra.insert(key.to_owned(), value.round().clamp(0.0, 255.0));
+            }
             _ => {
                 self.extra.insert(key.to_owned(), both);
             }

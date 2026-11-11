@@ -110,6 +110,16 @@ struct Section {
     controls: &'static [Control],
 }
 
+/// A plugin's row, as the spacing goes by it (its words are its own).
+static PLUGIN_ROW: Control = Control::Choice("", &[]);
+
+/// The rows the plugins that are on add to the brush studio's Properties, kept with each brush:
+/// each one's label, key and choices.
+pub fn plugin_rows(plugins: &procraft_core::Plugins) -> Vec<(String, String, Vec<String>)> {
+    let on = plugins.plugins().into_iter().filter(|p| p.on && p.problem.is_none());
+    on.flat_map(|p| p.brush_controls).map(|c| (c.label, c.key, c.choices)).collect()
+}
+
 /// A page: its name, its icon (shown this wide) and its sections.
 struct Page {
     name: &'static str,
@@ -689,6 +699,8 @@ pub enum Asked {
 #[derive(Default)]
 pub struct Studio {
     pub open: bool,
+    /// The rows plugins add to Properties: each one's label, key and choices.
+    pub plugin_rows: Vec<(String, String, Vec<String>)>,
     tab: usize,
     name: String,
     /// The name as typed in its field on the About page, and whether the field has been focused.
@@ -707,6 +719,8 @@ pub struct Studio {
     /// The pen painting on the pad, if one is: its pointer and pressure as last given.
     pad_pen: Option<(u64, f32)>,
     pad_menu: bool,
+    /// A plugin's Randomise was tapped: the brush is set at random once the frame is drawn.
+    randomise_tapped: bool,
     /// The frame the pad menu opened in (the press that opened it doesn't close it).
     pad_menu_frame: u64,
     /// The brush's sample stroke, and when it is drawn again.
@@ -764,7 +778,8 @@ impl Studio {
     }
 
     fn read(&mut self, ctx: &egui::Context, session: &CanvasSession) {
-        let keys = studio_keys();
+        let mut keys = studio_keys();
+        keys.extend(self.plugin_rows.iter().map(|(_, key, _)| key.clone()));
         let values = session.studio_settings(keys.clone());
         self.values = keys.into_iter().zip(values).collect();
         self.read_sources(ctx, session);
@@ -959,6 +974,7 @@ impl Studio {
         if !self.open {
             return None;
         }
+        self.plugin_rows = plugin_rows(&prefs.plugins);
         if self.preview_due.is_some_and(|due| Instant::now() >= due) {
             self.preview_due = None;
             self.preview = brush_preview(ctx, session);
@@ -1014,11 +1030,16 @@ impl Studio {
                 self.rail(ui, look, pages);
             }
             self.settings(ui, look, session, settings);
-            if let Some(done) = self.pad_view(ui, look, pad) {
+            let randomises = prefs.plugins.randomises_brushes();
+            if let Some(done) = self.pad_view(ui, look, pad, randomises) {
                 self.close(session, done);
                 asked = Some(Asked::Closed);
             }
         });
+        if std::mem::take(&mut self.randomise_tapped) && session.studio_randomise() {
+            self.read(ctx, session);
+            self.sync_pad(session);
+        }
         if self.pad_menu {
             self.pad_menu(ctx, session, prefs);
         }
@@ -1137,6 +1158,19 @@ impl Studio {
                             above = Edge::Control(control);
                         }
                     }
+                    // the rows plugins that are on add to Properties, each under its own label
+                    if page.name == "Properties" {
+                        for (label, key, choices) in self.plugin_rows.clone() {
+                            ui.add_space(gap(above, None));
+                            let (row, _) = ui.allocate_exact_size(vec2(width, 23.0), Sense::hover());
+                            let at = pos2(row.left() + 8.0, row.center().y);
+                            text(ui.painter(), at, Align2::LEFT_CENTER, &label, 21.0, Weight::Bold, argb(HEADER));
+                            ui.add_space(gap(Edge::Title, Some(&PLUGIN_ROW)));
+                            let options: Vec<&str> = choices.iter().map(String::as_str).collect();
+                            self.choice_rows(ui, look, session, &key, &options, width);
+                            above = Edge::Control(&PLUGIN_ROW);
+                        }
+                    }
                     ui.add_space(77.0);
                 });
         });
@@ -1183,6 +1217,60 @@ impl Studio {
         by.is_none_or(|(key, choice)| self.value(key).round() as i32 == choice)
     }
 
+    /// A choice as a list of rows, the chosen one lit with a tick: `key` set to the row's place.
+    fn choice_rows(
+        &mut self,
+        ui: &mut Ui,
+        look: &mut Look,
+        session: &Arc<CanvasSession>,
+        key: &str,
+        options: &[&str],
+        width: f32,
+    ) {
+        let chosen = self.value(key).round() as i32;
+        let height = 44.0 * options.len() as f32 + options.len().saturating_sub(1) as f32;
+        let (group, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        ui.painter().rect_filled(group, 22, argb(LIST));
+        let mut y = group.top();
+        for (i, label) in options.iter().enumerate() {
+            if i > 0 {
+                ui.painter().rect_filled(
+                    Rect::from_min_size(pos2(group.left(), y), vec2(width, 1.0)),
+                    0,
+                    argb(LIST_LINE),
+                );
+                y += 1.0;
+            }
+            let row = Rect::from_min_size(pos2(group.left(), y), vec2(width, 44.0));
+            let on = i as i32 == chosen;
+            if on {
+                let corner = |at: bool| if at { 22 } else { 0 };
+                let corners = egui::CornerRadius {
+                    nw: corner(i == 0),
+                    ne: corner(i == 0),
+                    sw: corner(i + 1 == options.len()),
+                    se: corner(i + 1 == options.len()),
+                };
+                ui.painter().rect_filled(row, corners, argb(pc::ACCENT));
+                look.icon(ui, &icons::MENU_TICK, pos2(row.right() - 14.0 - 17.0, row.center().y), 34.0, Color32::WHITE);
+            }
+            let ink = if on { Color32::WHITE } else { argb(DIM) };
+            text(
+                ui.painter(),
+                pos2(row.left() + 16.0, row.center().y),
+                Align2::LEFT_CENTER,
+                label,
+                17.0,
+                Weight::Regular,
+                ink,
+            );
+            if ui.interact(row, ui.scope_id().with(("choice", key, i)), Sense::click()).clicked() {
+                self.set(session, key, i as f32);
+            }
+            y += 44.0;
+        }
+    }
+
     fn control(&mut self, ui: &mut Ui, look: &mut Look, session: &Arc<CanvasSession>, c: &'static Control, width: f32) {
         match c {
             Control::Slider(key, label, how, by) => {
@@ -1226,56 +1314,7 @@ impl Studio {
                     ui.painter().rect_filled(knob, 12, argb(SWITCH_FIXED_KNOB));
                 }
             }
-            Control::Choice(key, options) => {
-                let chosen = self.value(key).round() as i32;
-                let height = 44.0 * options.len() as f32 + options.len().saturating_sub(1) as f32;
-                let (group, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-                ui.painter().rect_filled(group, 22, argb(LIST));
-                let mut y = group.top();
-                for (i, label) in options.iter().enumerate() {
-                    if i > 0 {
-                        ui.painter().rect_filled(
-                            Rect::from_min_size(pos2(group.left(), y), vec2(width, 1.0)),
-                            0,
-                            argb(LIST_LINE),
-                        );
-                        y += 1.0;
-                    }
-                    let row = Rect::from_min_size(pos2(group.left(), y), vec2(width, 44.0));
-                    let on = i as i32 == chosen;
-                    if on {
-                        let corner = |at: bool| if at { 22 } else { 0 };
-                        let corners = egui::CornerRadius {
-                            nw: corner(i == 0),
-                            ne: corner(i == 0),
-                            sw: corner(i + 1 == options.len()),
-                            se: corner(i + 1 == options.len()),
-                        };
-                        ui.painter().rect_filled(row, corners, argb(pc::ACCENT));
-                        look.icon(
-                            ui,
-                            &icons::MENU_TICK,
-                            pos2(row.right() - 14.0 - 17.0, row.center().y),
-                            34.0,
-                            Color32::WHITE,
-                        );
-                    }
-                    let ink = if on { Color32::WHITE } else { argb(DIM) };
-                    text(
-                        ui.painter(),
-                        pos2(row.left() + 16.0, row.center().y),
-                        Align2::LEFT_CENTER,
-                        label,
-                        17.0,
-                        Weight::Regular,
-                        ink,
-                    );
-                    if ui.interact(row, ui.scope_id().with(("choice", key, i)), Sense::click()).clicked() {
-                        self.set(session, key, i as f32);
-                    }
-                    y += 44.0;
-                }
-            }
+            Control::Choice(key, options) => self.choice_rows(ui, look, session, key, options, width),
             Control::Kinds(key, options) => {
                 let chosen = self.value(key).round() as i32;
                 let (band, _) = ui.allocate_exact_size(vec2(width, 34.0), Sense::hover());
@@ -1496,9 +1535,9 @@ impl Studio {
         }
     }
 
-    /// The drawing pad with its buttons: Drawing Pad (its menu), Cancel and Done. Returns whether
-    /// Done (true) or Cancel (false) was tapped.
-    fn pad_view(&mut self, ui: &mut Ui, look: &mut Look, area: Rect) -> Option<bool> {
+    /// The drawing pad with its buttons: Drawing Pad (its menu), Cancel and Done, and a plugin's
+    /// Randomise where `randomises`. Returns whether Done (true) or Cancel (false) was tapped.
+    fn pad_view(&mut self, ui: &mut Ui, look: &mut Look, area: Rect, randomises: bool) -> Option<bool> {
         self.pad_rect = Some(area);
         ui.painter().rect_filled(area, 0, argb(BACK));
         if let Some(id) = self.pad_texture {
@@ -1541,6 +1580,19 @@ impl Studio {
         ui.painter().rect_filled(cancel, 21.5, argb(BUTTON));
         ui.painter().rect_stroke(cancel, 21.5, Stroke::new(1.0, argb(BUTTON_EDGE)), egui::StrokeKind::Inside);
         text(ui.painter(), cancel.center(), Align2::CENTER_CENTER, "Cancel", 17.0, Weight::Regular, argb(BUTTON_INK));
+        // a plugin's: the brush set at random
+        if randomises {
+            let galley =
+                ui.painter().layout_no_wrap("Randomise".to_owned(), Weight::Regular.font(17.0), argb(BUTTON_INK));
+            let width = galley.size().x + 32.0;
+            let button = Rect::from_min_size(pos2(cancel.left() - 13.0 - width, cancel.top()), vec2(width, 43.0));
+            ui.painter().rect_filled(button, 21.5, argb(BUTTON));
+            ui.painter().rect_stroke(button, 21.5, Stroke::new(1.0, argb(BUTTON_EDGE)), egui::StrokeKind::Inside);
+            ui.painter().galley(button.center() - galley.size() / 2.0, galley, argb(BUTTON_INK));
+            if ui.interact(button, ui.scope_id().with("randomise"), Sense::click()).clicked() {
+                self.randomise_tapped = true;
+            }
+        }
         ui.painter().circle_filled(done.center(), 22.0, argb(DONE));
         look.icon(ui, &icons::DONE_TICK, done.center(), 40.0, Color32::WHITE);
         if ui.interact(cancel, ui.scope_id().with("cancel"), Sense::click()).clicked() {

@@ -18,6 +18,7 @@ mod adjusting;
 mod animation;
 mod brush_files;
 mod brush_library;
+mod brush_pictures;
 mod brushes;
 mod bundled;
 mod clipboard;
@@ -48,8 +49,12 @@ mod modes;
 mod palettes;
 mod pick;
 mod pickers;
+mod plugin_artwork;
+mod plugin_canvas;
+mod plugin_commands;
 mod plugin_file;
 mod plugin_filter;
+mod plugin_panel;
 mod plugin_run;
 mod plugins;
 mod pour;
@@ -66,6 +71,8 @@ mod render;
 mod reveal;
 mod scene3d;
 mod selection;
+mod sound_file;
+mod stroke_sound;
 mod studio;
 #[cfg(test)]
 mod tests;
@@ -74,6 +81,7 @@ mod text_draw;
 mod timelapse;
 mod touch;
 mod transform;
+mod tween;
 #[cfg(target_os = "android")]
 mod window;
 // the iPad app's window is its layer: taken and drawn into as Android's is
@@ -106,6 +114,7 @@ pub use animation::{
     export_fps_label, frame_rate,
 };
 pub use brush_files::{BrushesRead, OTHER_BRUSH_EXTENSIONS, ReadBrushes, is_brush_zip, read_any_brushes, read_brushes};
+pub use brush_library::prepare_brushes;
 pub use brushes::{BrushInfo, BrushSetInfo, RecentBrush};
 pub use colour::{
     cmyk_profiles, color_profiles, colours_in_p3, convert_color, import_profile, is_cmyk_profile, set_profile_folder,
@@ -135,13 +144,16 @@ pub use palettes::{PaletteInfo, Palettes, colour_name};
 pub use pick::Pick;
 pub use pickers::{
     disc_picture, disc_to_square, disc_to_square_point, harmony_wheel, p3_hsv_of, p3_hsv_to_rgb, rgb_to_p3_hsv,
-    square_to_disc, square_to_disc_point,
+    square_to_disc, square_to_disc_point, triangle_picture, triangle_point, triangle_sv,
 };
+pub use plugin_canvas::{PluginCanvas, PluginKind};
 pub use plugin_file::read_plugin_file;
 pub use plugin_filter::PluginFilterShown;
+pub use plugin_panel::{PanelRow, PluginPanel};
 pub use plugins::{
-    PluginControl, PluginInfo, PluginOffer, PluginPart, PluginSlider, PluginSource, PluginSwitch, Plugins,
-    plugin_file_most_bytes, plugin_slider_along, plugin_slider_at, plugin_slider_shown, plugin_slider_whole,
+    PluginAction, PluginControl, PluginInfo, PluginOffer, PluginPart, PluginPlace, PluginSlider, PluginSource,
+    PluginSwitch, Plugins, plugin_file_most_bytes, plugin_slider_along, plugin_slider_at, plugin_slider_shown,
+    plugin_slider_whole,
 };
 pub use presets::{
     CanvasPreset, P3, SRGB, per_inch, preset_height, preset_label, preset_number, preset_width, presets_from_json,
@@ -155,7 +167,7 @@ pub use quick_menu::{
     quick_adjustments_listed, quick_menu_active_after, quick_menu_added, quick_menu_saved, quick_menu_slots,
     quick_menus, quick_menus_saved,
 };
-pub use quickshape::{QuickShapeInfo, QuickShapeKind};
+pub use quickshape::{QuickShapeAnchor, QuickShapeInfo, QuickShapeKind};
 pub use reference_view::{
     ReferenceSizes, ReferenceView, reference_picture_point, reference_picture_rect, reference_view_pinched,
 };
@@ -403,6 +415,17 @@ pub(crate) struct State {
     pub(crate) brush_on_screen: bool,
     /// What samples go through on their way to a stroke, if anything.
     pub(crate) hooks: Option<Arc<hooks::Hooks>>,
+    /// A plugin's own artwork shown here, if this session shows one: its strokes go to it.
+    pub(crate) plugin_artwork: Option<plugin_artwork::PluginArtwork>,
+    /// Opened from a folder holding a plugin's artwork: its kind and its data, until the app opens
+    /// it with its plugin.
+    pub(crate) plugin_opened: Option<plugin_artwork::PluginOpened>,
+    /// The picker plugin's picture, compiled for this session's GPU: whose it is, and its code.
+    pub(crate) picker_program: Option<(String, Arc<str>, Arc<procraft_gpu::PictureProgram>)>,
+    /// When the stroke's input was last heard, for a sound plugin.
+    pub(crate) sound_heard: Option<std::time::Instant>,
+    /// Where the pen last hovered (window pixels) and when, for the spray can's rattle.
+    pub(crate) sound_hover: Option<(procraft_engine::geom::Vec2, std::time::Instant)>,
     /// Crops kept for undo: the canvas and document from before; and one undone, for redo, with
     /// the steps the canvas then put back had made (redo only while that hasn't changed).
     crop_undo: Option<(Canvas, Document)>,
@@ -477,6 +500,12 @@ pub(crate) struct State {
     pub(crate) pad_strokes: Option<Vec<(PointerKind, Vec<PenSample>)>>,
     /// Brush files' grains at their own size.
     pub(crate) grain_store: grain_store::GrainStore,
+    /// Where the library was last kept or read whole, and what it held then (see
+    /// `brush_library::Images::Told`): kept again only once that changes.
+    pub(crate) library_kept: Option<(std::path::PathBuf, u64)>,
+    /// Plugins' changes in progress (an action's or a panel touch's): while any is, no stroke
+    /// begins and undo and redo wait, or they would join its step.
+    pub(crate) plugin_stepping: u32,
     /// The pad shows only its sample scribble: a stroke of one's own takes it away.
     pub(crate) pad_sample: bool,
     /// The pad drawn as a sphere, the flat pad's strokes set aside meanwhile.
@@ -1271,6 +1300,11 @@ impl CanvasSession {
             selection_visibility: 0.25,
             brush_on_screen: false,
             hooks: None,
+            picker_program: None,
+            plugin_artwork: None,
+            plugin_opened: None,
+            sound_heard: None,
+            sound_hover: None,
             input: procraft_engine::stroke::InputSettings::default(),
             crop_redo: None,
             library: shelf,
@@ -1305,6 +1339,8 @@ impl CanvasSession {
             frames: 0,
             pad_strokes: None,
             grain_store: grain_store::GrainStore::default(),
+            library_kept: None,
+            plugin_stepping: 0,
             pad_sample: false,
             sphere: None,
             frame_interval_ms: 0.0,
@@ -1466,6 +1502,17 @@ impl CanvasSession {
     pub fn stroke_begin(&self, pointer: PointerKind, samples: Vec<PenSample>) {
         let mut guard = self.shared.lock();
         let st = &mut *guard;
+        // a plugin's own artwork takes its strokes itself
+        if st.plugin_touch(plugin_artwork::Phase::Down, &samples) {
+            self.shared.frame(st);
+            return;
+        }
+        // a plugin changing the artwork: this stroke would join its step
+        if st.plugin_stepping > 0 {
+            return;
+        }
+        // radial symmetry in as many parts as a plugin says, for this stroke
+        st.doc.guide.radial = st.hooks.as_ref().and_then(|hooks| hooks.radial_segments());
         // a fill still spreading in shows all of itself before anything is drawn over it
         st.end_reveal();
         // the graphics stopped (perhaps while the app was away, its notice long gone): nothing
@@ -1577,6 +1624,13 @@ impl CanvasSession {
     pub fn stroke_add(&self, samples: Vec<PenSample>) {
         let mut guard = self.shared.lock();
         let st = &mut *guard;
+        if st.plugin_touch(plugin_artwork::Phase::Moved, &samples) {
+            self.shared.frame(st);
+            return;
+        }
+        if st.plugin_stepping > 0 {
+            return;
+        }
         if st.scene_shown() {
             st.scene_stroke_add(&samples, false);
             self.shared.frame(st);
@@ -1629,6 +1683,13 @@ impl CanvasSession {
     pub fn stroke_end(&self, samples: Vec<PenSample>) {
         let mut guard = self.shared.lock();
         let st = &mut *guard;
+        if st.plugin_touch(plugin_artwork::Phase::Up, &samples) {
+            self.shared.frame(st);
+            return;
+        }
+        if st.plugin_stepping > 0 {
+            return;
+        }
         // a paint stroke's colour goes into the history (painting an adjustment on uses none)
         if st.tool == ToolKind::Paint
             && !st.adjusting
@@ -1673,6 +1734,10 @@ impl CanvasSession {
     pub fn stroke_cancel(&self) {
         let mut guard = self.shared.lock();
         let st = &mut *guard;
+        if st.plugin_touch(plugin_artwork::Phase::Off, &[]) {
+            self.shared.frame(st);
+            return;
+        }
         if st.scene_shown() {
             st.scene_stroke_cancel();
             self.shared.frame(st);
@@ -1947,6 +2012,15 @@ impl CanvasSession {
 
     /// Undoes the last step; returns what it was called, if it was named.
     pub fn undo(&self) -> Option<String> {
+        // (not while a plugin changes the artwork: its step isn't one yet)
+        if self.shared.lock().plugin_stepping > 0 {
+            return None;
+        }
+        // a plugin's own artwork goes back through what it kept; the canvas's own steps (an action's,
+        // say) once it has none
+        if self.plugin_undo(true) == Some(true) {
+            return None;
+        }
         self.await_pour();
         self.shared.lock().end_reveal();
         // transforming, the transform's own last change goes back: the canvas's steps wait until
@@ -1991,6 +2065,12 @@ impl CanvasSession {
 
     /// Redoes the last step undone; returns what it was called, if it was named.
     pub fn redo(&self) -> Option<String> {
+        if self.shared.lock().plugin_stepping > 0 {
+            return None;
+        }
+        if self.plugin_undo(false) == Some(true) {
+            return None;
+        }
         self.await_pour();
         self.shared.lock().end_reveal();
         // transforming, nothing is redone until it ends
@@ -2076,8 +2156,9 @@ impl CanvasSession {
             size: sliders.size,
             opacity: sliders.opacity,
             brush_diameter: st.brush(st.tool).diameter(sliders.size) * st.brush_scale(),
-            // an open shape is kept, then undone
-            can_undo: st.canvas.as_ref().is_some_and(Canvas::can_undo)
+            // an open shape is kept, then undone; a plugin's artwork goes by its own steps
+            can_undo: st.plugin_steps().is_some_and(|(undo, _)| undo)
+                || st.canvas.as_ref().is_some_and(Canvas::can_undo)
                 || st.crop_undo.is_some()
                 || st.shape.is_some()
                 || st.adjust.touched()
@@ -2086,7 +2167,8 @@ impl CanvasSession {
             can_redo: st.shape.as_ref().map_or_else(
                 || st.canvas.as_ref().is_some_and(Canvas::can_redo) || st.crop_redo_ready() || st.shape_to_redo(),
                 quickshape::ShapeEdit::can_redo,
-            ) || st.text_edit.as_ref().is_some_and(|e| e.has_step(false)),
+            ) || st.text_edit.as_ref().is_some_and(|e| e.has_step(false))
+                || st.plugin_steps().is_some_and(|(_, redo)| redo),
             zoom: st.view.map_or(1.0, |v| v.zoom()),
             frames: st.frames,
             frame_interval_ms: st.frame_interval_ms,

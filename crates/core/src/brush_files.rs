@@ -123,7 +123,7 @@ impl CanvasSession {
 
 /// Other apps' brush files, by the endings of their names: Photoshop's, GIMP's brushes, pipes and
 /// generated brushes, Krita's presets and bundles, Clip Studio's sub tools.
-pub const OTHER_BRUSH_EXTENSIONS: [&str; 7] = ["abr", "gbr", "gih", "vbr", "kpp", "bundle", "sut"];
+pub const OTHER_BRUSH_EXTENSIONS: [&str; 8] = ["abr", "gbr", "gih", "vbr", "kpp", "bundle", "sut", "sutg"];
 
 /// Whether `bytes` are a zip holding brushes (a brush's archive, or a set's list), whatever the
 /// file is called: a brush or set file sent on as a plain zip.
@@ -328,9 +328,14 @@ fn folder_id(seed: u64, i: usize) -> String {
 /// A brush from a brush file: the studio's controls on a fresh brush, its images found or stood in
 /// for.
 /// A Photoshop tip fitted into a shape's square, centred on black: each pixel the average of the
-/// tip's pixels it covers (or the nearest one, drawn up).
+/// tip's pixels it covers, or (drawn up) between the four nearest, so a small tip made large is
+/// smooth, as other apps draw it, not in blocks.
 fn fitted(t: &procraft_engine::abr::AbrTip) -> Vec<u8> {
-    let n = TEXTURE_SIZE;
+    fitted_at(t, TEXTURE_SIZE)
+}
+
+/// `t` fitted into a square `n` pixels a side, as [`fitted`] fits it.
+fn fitted_at(t: &procraft_engine::abr::AbrTip, n: usize) -> Vec<u8> {
     let (w, h) = (t.width as usize, t.height as usize);
     let mut out = vec![0u8; n * n];
     if w == 0 || h == 0 {
@@ -340,6 +345,26 @@ fn fitted(t: &procraft_engine::abr::AbrTip) -> Vec<u8> {
     let (tw, th) =
         (((w as f32 * scale).round() as usize).clamp(1, n), ((h as f32 * scale).round() as usize).clamp(1, n));
     let (ox, oy) = ((n - tw) / 2, (n - th) / 2);
+    if scale > 1.0 {
+        // drawn up: each pixel between the tip's four nearest (its edge carried on past it)
+        let get = |x: usize, y: usize| f32::from(t.pixels.get(y.min(h - 1) * w + x.min(w - 1)).copied().unwrap_or(0));
+        let place = |i: usize| {
+            let u = ((i as f32 + 0.5) / scale - 0.5).max(0.0);
+            (u.floor() as usize, u.fract())
+        };
+        for y in 0..th {
+            let (y0, fy) = place(y);
+            for x in 0..tw {
+                let (x0, fx) = place(x);
+                let top = get(x0, y0) * (1.0 - fx) + get(x0 + 1, y0) * fx;
+                let bottom = get(x0, y0 + 1) * (1.0 - fx) + get(x0 + 1, y0 + 1) * fx;
+                if let Some(v) = out.get_mut((oy + y) * n + ox + x) {
+                    *v = (top * (1.0 - fy) + bottom * fy).round() as u8;
+                }
+            }
+        }
+        return out;
+    }
     let span = |i: usize, most: usize| {
         let from = ((i as f32 / scale) as usize).min(most - 1);
         (from, (((i + 1) as f32 / scale).ceil() as usize).clamp(from + 1, most))
@@ -392,14 +417,25 @@ fn other_brushes(bytes: &[u8], name: String) -> Option<(String, Vec<Brush>)> {
 }
 
 /// A brush of a Clip Studio sub tool: its tip (an image, else round with its edge and roundness),
-/// spacing and angle.
+/// spacing, angle and how it turns, size, opacity and flow, and its texture.
 fn csp_brush(c: &procraft_engine::csp::CspBrush) -> Brush {
-    // the first of its pictures that paints anything: white, or else dark
-    let paints = |t: &procraft_engine::abr::AbrTip| t.pixels.iter().any(|&v| v > 0);
-    let tip = c
-        .tip_pngs
-        .iter()
-        .find_map(|png| png_tip(png, true).filter(paints).or_else(|| png_tip(png, false).filter(paints)));
+    use std::f32::consts::{FRAC_PI_2, TAU};
+    // the first of its pictures that lays any ink
+    let tip = c.tip_pngs.iter().find_map(|png| csp_ink(png));
+    // sprayed: a stamp as wide as the area the particles fall in (or a particle, if larger), the
+    // particle in its middle, as many to a place as fall there, each thrown about the area
+    let spray = c.spray.as_ref().zip(c.size).map(|(s, area)| (s, area, area.max(s.particle)));
+    let tip = match spray {
+        Some((s, _, stamp)) => Some(spray_tip(
+            tip.as_ref(),
+            c.hardness.unwrap_or(1.0),
+            (c.roundness.unwrap_or(1.0), c.flattened_vertically),
+            c.angle,
+            s.particle / stamp,
+        )),
+        None => tip,
+    };
+    let picture = tip.as_ref().map(|t| (t.width as f32, t.height as f32));
     let mut b = match tip {
         Some(t) => tip_brush(&procraft_engine::abr::AbrTip { name: c.name.clone(), ..t }),
         None => Brush { name: c.name.clone(), ..Brush::round_pen() },
@@ -413,11 +449,376 @@ fn csp_brush(c: &procraft_engine::csp::CspBrush) -> Brush {
     if let Some(spacing) = c.spacing {
         b.spacing = Brush::spacing_within_reach(spacing);
     }
-    b.shape.rotation = c.angle;
+    // turning with the stroke (as a ribbon does), its angle is from the stroke's way, its 0
+    // pointing the tip's top along it: a quarter turn back of ours, whose 0 lays its width along
+    let follows = c.follows || c.ribbon;
+    b.shape.follow = if follows { 1.0 } else { 0.0 };
+    // a round tip flattened side to side is ours (flattened top to bottom) a quarter turned
+    let side_to_side = picture.is_none() && !c.flattened_vertically && c.roundness.is_some_and(|r| r < 1.0);
+    let turn = if side_to_side { FRAC_PI_2 } else { 0.0 } - if follows { FRAC_PI_2 } else { 0.0 };
+    b.shape.rotation = (c.angle + turn).rem_euclid(TAU);
+    // all of it at random is any way: half a turn either way
+    b.shape.scatter = c.random_turn.clamp(0.0, 1.0);
+    // a ribbon's pictures one after the other along the stroke: as far apart as each is long that
+    // way (a stamp's size is its picture's longer side)
+    if let (true, Some((w, h))) = (c.ribbon, picture) {
+        let (cos, sin) = (b.shape.rotation.cos().abs(), b.shape.rotation.sin().abs());
+        b.spacing = Brush::spacing_within_reach((cos * w + sin * h) / w.max(h).max(1.0));
+    }
+    if let Some(opacity) = c.opacity {
+        b.max_opacity = opacity.clamp(0.0, 1.0);
+        b.min_opacity = b.min_opacity.min(b.max_opacity);
+    }
+    if let Some(flow) = c.flow {
+        b.set_setting("flow", flow);
+    }
+    // its most size from its pixels (as a sampled tip's is), the least 1%
+    if let Some(px) = c.size {
+        brushfile::set_sizes(&mut b, px * ABR_SIZE_PER_PIXEL, Some(0.01));
+    }
+    if let Some((s, area, stamp)) = spray {
+        csp_spray(&mut b, s, area, stamp, c.spacing);
+    }
+    csp_pen(&mut b, &c.pen);
+    if let Some(t) = &c.taper {
+        csp_taper(&mut b, t);
+    }
     if let Some(t) = &c.texture {
-        paper(&mut b, &t.pngs, t.reverse, t.density.unwrap_or(1.0), t.scale.unwrap_or(1.0));
+        csp_paper(&mut b, t);
+    }
+    // the texture's density by pressure, now that it has its grain
+    if let (Some(d), true) = (&c.pen.texture_density, b.grain.source.is_some()) {
+        use procraft_engine::brush::PressureCurve;
+        // the depth scaled by the curve, from what it leaves at none up to all of it
+        let curve = d.pressure.as_ref().map(|p| csp_curve(&p.points, p.least));
+        b.pressure_curves.set(PressureCurve::GrainDepth, curve);
+        b.set_setting("grain_depth_jitter", d.random.map_or(0.0, |least| 1.0 - least));
     }
     b
+}
+
+/// Gives `b` a Clip Studio spray: its stamp `stamp` pixels across holding one particle in its middle
+/// (see [`spray_tip`]), as many to a place as the density says (up to our 16), each thrown at
+/// random as far as the `area` the particles fall in reaches (nearer the middle the more they
+/// gather), turned as the particles are. The sub tool's spacing goes by the area; none (the app's
+/// own), ours.
+fn csp_spray(b: &mut Brush, s: &procraft_engine::csp::CspSpray, area: f32, stamp: f32, spacing: Option<f32>) {
+    use std::f32::consts::{FRAC_PI_2, TAU};
+    // the particle carries the tip's roundness: the area is round
+    b.shape.roundness = 1.0;
+    b.shape.follow = if s.follows { 1.0 } else { 0.0 };
+    b.shape.rotation = (s.angle - if s.follows { FRAC_PI_2 } else { 0.0 }).rem_euclid(TAU);
+    b.shape.scatter = s.random_turn.clamp(0.0, 1.0);
+    b.shape.count = s.density.clamp(1, 16);
+    // fewer with less pressure (down to the share it leaves), and at random
+    if let Some(d) = &s.density_by {
+        use procraft_engine::brush::PressureCurve;
+        b.pressure_curves.set(PressureCurve::Count, d.pressure.as_ref().map(|p| csp_curve(&p.points, p.least)));
+        b.set_setting("count_jitter", d.random.map_or(0.0, |least| 1.0 - least.clamp(0.0, 1.0)));
+    }
+    // (sprayed, a ribbon's spacing has nothing to go by: left to us, as a tip is)
+    let spacing = spacing.map_or(Brush::round_pen().spacing, |s| s * area / stamp.max(1e-3));
+    b.spacing = Brush::spacing_within_reach(spacing);
+    // (the spacing first: it sets how big it may be)
+    brushfile::set_sizes(b, stamp * ABR_SIZE_PER_PIXEL, Some(0.01));
+    let gathered = 1.0 - 0.5 * s.bias.max(0.0);
+    let control = jitter_control(b, 0.5 * area / stamp.max(1e-3) * gathered);
+    b.set_setting("jitter_lateral", control);
+    b.set_setting("jitter_linear", control);
+}
+
+/// A sprayed tip's picture: one particle of `share` of its width in its middle, the tip's picture
+/// (or, round, a disc of the tip's hardness) made that small, flattened by its roundness (top to
+/// bottom if `flattened.1`, else side to side) and turned by its `angle`. Each pixel is the mean
+/// of 16 places in it, so a particle a few pixels across keeps its ink.
+fn spray_tip(
+    particle: Option<&procraft_engine::abr::AbrTip>,
+    hardness: f32,
+    flattened: (f32, bool),
+    angle: f32,
+    share: f32,
+) -> procraft_engine::abr::AbrTip {
+    const PLACES: usize = 4;
+    let n = TEXTURE_SIZE;
+    let side = (n as f32 * share.clamp(0.0, 1.0)).max(1.0);
+    let middle = n as f32 / 2.0;
+    let roundness = flattened.0.clamp(0.01, 1.0);
+    let (wide, tall) = if flattened.1 { (1.0, roundness) } else { (roundness, 1.0) };
+    let fitted = particle.map(fitted);
+    // the particle at (x, y), each -0.5 to 0.5 across it: the picture between its pixels, or the disc
+    let soft = (0.5 * (1.0 - hardness.clamp(0.0, 1.0))).max(0.75 / side);
+    let at = |x: f32, y: f32| -> f32 {
+        if x.abs() > 0.5 || y.abs() > 0.5 {
+            return 0.0;
+        }
+        match &fitted {
+            Some(pixels) => {
+                let (u, v) = ((x + 0.5) * n as f32 - 0.5, (y + 0.5) * n as f32 - 0.5);
+                let (x0, y0) = (u.floor(), v.floor());
+                let (fx, fy) = (u - x0, v - y0);
+                let get = |i: f32, j: f32| {
+                    if i < 0.0 || j < 0.0 || i >= n as f32 || j >= n as f32 {
+                        0.0
+                    } else {
+                        f32::from(pixels.get(j as usize * n + i as usize).copied().unwrap_or(0)) / 255.0
+                    }
+                };
+                let top = get(x0, y0) * (1.0 - fx) + get(x0 + 1.0, y0) * fx;
+                let bottom = get(x0, y0 + 1.0) * (1.0 - fx) + get(x0 + 1.0, y0 + 1.0) * fx;
+                top * (1.0 - fy) + bottom * fy
+            }
+            None => ((0.5 - x.hypot(y)) / soft + 0.5).clamp(0.0, 1.0),
+        }
+    };
+    let (cos, sin) = (angle.cos(), angle.sin());
+    let pixels = (0..n * n)
+        .map(|i| {
+            let (px, py) = ((i % n) as f32 - middle, (i / n) as f32 - middle);
+            // nothing past the particle's reach
+            if px.hypot(py) > side * 0.75 + 2.0 {
+                return 0;
+            }
+            let mut sum = 0.0;
+            for k in 0..PLACES * PLACES {
+                let (dx, dy) =
+                    (((k % PLACES) as f32 + 0.5) / PLACES as f32, ((k / PLACES) as f32 + 0.5) / PLACES as f32);
+                let (x, y) = (px + dx, py + dy);
+                // back through the turn, then the flattening, into the particle's own square
+                let (lx, ly) = (x * cos + y * sin, -x * sin + y * cos);
+                sum += at(lx / (side * wide), ly / (side * tall));
+            }
+            (sum / (PLACES * PLACES) as f32 * 255.0).round() as u8
+        })
+        .collect();
+    procraft_engine::abr::AbrTip { name: String::new(), spacing: None, width: n as u32, height: n as u32, pixels }
+}
+
+/// Our jitter's control that throws a stamp of `b` at most `amount` of its diameters away: our
+/// jitter throws a stamp up to its control to the power 2.2 times the scale, of half its diagonal
+/// (for a round stamp a little over 0.7 of its diameter).
+fn jitter_control(b: &Brush, amount: f32) -> f32 {
+    use procraft_engine::stroke::JITTER_FILE_SCALE;
+    let reach = 0.5 * (1.0 + b.shape.roundness * b.shape.roundness).sqrt();
+    (amount / reach / JITTER_FILE_SCALE).powf(1.0 / 2.2).clamp(0.0, 1.0)
+}
+
+/// A Clip Studio source's curve as ours: `least` and up to all of it, as the curve goes. Its points
+/// are joined without swinging past them ([`csp_curve_at`]); ours bends as a natural spline, which
+/// through a few points spaced unevenly can swing far past them (a flow curve rising steeply at
+/// its very end fell below nothing in its middle), so where it would stray from the file's it is
+/// given the file's at [`CSP_CURVE_PLACES`] places as well as at its own points.
+fn csp_curve(points: &[(f32, f32)], least: f32) -> Curve {
+    use procraft_engine::geom::Vec2;
+    let least = least.clamp(0.0, 1.0);
+    let scaled = |y: f32| least + (1.0 - least) * y;
+    let own = Curve::new(&points.iter().map(|&(x, y)| Vec2::new(x, scaled(y))).collect::<Vec<_>>());
+    let across = |n: usize| (0..n).map(move |i| i as f32 / (n - 1) as f32);
+    let strays = across(65).any(|x| (own.eval(x) - scaled(csp_curve_at(points, x))).abs() > CSP_CURVE_STRAY);
+    if !strays {
+        return own;
+    }
+    let places = across(CSP_CURVE_PLACES).chain(points.iter().map(|p| p.0));
+    Curve::new(&places.map(|x| Vec2::new(x, scaled(csp_curve_at(points, x)))).collect::<Vec<_>>())
+}
+
+/// How far ours may stray from a Clip Studio curve before it is given the file's at more places.
+const CSP_CURVE_STRAY: f32 = 0.02;
+/// The places a Clip Studio curve is given at where ours would stray from it, evenly across.
+const CSP_CURVE_PLACES: usize = 17;
+
+/// A Clip Studio curve at `x`: a monotone cubic through its points (rising or falling only as
+/// they do, and level where they turn), held level beyond the first and the last.
+fn csp_curve_at(points: &[(f32, f32)], x: f32) -> f32 {
+    let (Some(&(x0, y0)), Some(&(xn, yn))) = (points.first(), points.last()) else { return x };
+    if x <= x0 {
+        return y0;
+    }
+    if x >= xn {
+        return yn;
+    }
+    // each span's width and slope, then the slope at each point: the spans' own at the ends, none
+    // where they turn, else their mean weighted by width (harmonic, so it never overshoots)
+    let spans: Vec<(f32, f32)> =
+        points.windows(2).filter_map(|w| w.first().zip(w.get(1))).map(|(a, b)| (b.0 - a.0, b.1 - a.1)).collect();
+    let slope = |(w, rise): (f32, f32)| rise / w.max(1e-6);
+    let at_point = |k: usize| -> f32 {
+        let before = k.checked_sub(1).and_then(|j| spans.get(j)).copied();
+        match (before, spans.get(k).copied()) {
+            (Some(a), Some(b)) => {
+                let (sa, sb) = (slope(a), slope(b));
+                if sa * sb <= 0.0 {
+                    return 0.0;
+                }
+                let (wa, wb) = (2.0 * b.0 + a.0, b.0 + 2.0 * a.0);
+                (wa + wb) / (wa / sa + wb / sb)
+            }
+            (Some(s), None) | (None, Some(s)) => slope(s),
+            (None, None) => 0.0,
+        }
+    };
+    let Some(k) = points.windows(2).position(|w| w.get(1).is_some_and(|b| x <= b.0)) else { return yn };
+    let (Some(&(xa, ya)), Some(&(xb, yb))) = (points.get(k), points.get(k + 1)) else { return yn };
+    let h = (xb - xa).max(1e-6);
+    let t = (x - xa) / h;
+    let (t2, t3) = (t * t, t * t * t);
+    let y = (2.0 * t3 - 3.0 * t2 + 1.0) * ya
+        + (t3 - 2.0 * t2 + t) * h * at_point(k)
+        + (-2.0 * t3 + 3.0 * t2) * yb
+        + (t3 - t2) * h * at_point(k + 1);
+    // held to the span's own rise, whatever the slopes
+    y.clamp(ya.min(yb), ya.max(yb))
+}
+
+/// Gives `b` what of a Clip Studio sub tool follows the pen. Pressure takes a setting down to what
+/// it leaves at none, along its curve (ours, for the size, opacity, flow and roundness); a setting
+/// the file has but no pressure drives doesn't follow it. Chance takes it down as far, as jitter.
+/// Speed is left out: how fast the file's own fastest is isn't known, and taken as ours a pen
+/// fades to its least on any quick stroke. Of tilt, only fading the opacity and flattening the tip
+/// as the pen leans are ours (as far as tilt takes them, its curve left out); tilt growing or
+/// shrinking the size is not. What scales our opacity before it is eased (by the power
+/// [`procraft_engine::brush::FLOW_POWER`]) is unwound by that power, so a stamp lays what the file
+/// says.
+fn csp_pen(b: &mut Brush, pen: &procraft_engine::csp::CspPen) {
+    use procraft_engine::brush::{FLOW_POWER, PressureCurve};
+    let taken = |least: Option<f32>| least.map_or(0.0, |l| 1.0 - l.clamp(0.0, 1.0));
+    let unwound = |least: Option<f32>| least.map(|l| l.clamp(0.0, 1.0).powf(1.0 / FLOW_POWER));
+    // how far pressure takes a setting down, and its curve
+    fn pressed(d: &procraft_engine::csp::CspDynamics) -> Option<(f32, &procraft_engine::csp::CspCurve)> {
+        d.pressure.as_ref().map(|p| (1.0 - p.least.clamp(0.0, 1.0), p))
+    }
+    if let Some(d) = &pen.size {
+        match pressed(d) {
+            Some((amount, p)) => {
+                b.pressure_size = amount;
+                b.size_curve = csp_curve(&p.points, 0.0);
+            }
+            None => b.pressure_size = 0.0,
+        }
+        b.set_setting("jitter_size", taken(d.random));
+    }
+    // the opacity and the flow both lay how much ink: chance by the more of the two
+    let mut chance = 0.0f32;
+    if let Some(d) = &pen.opacity {
+        match &d.pressure {
+            // all of the opacity follows the curve, from what it leaves at none up, unwound
+            Some(p) => {
+                b.pressure_opacity = if p.least < 1.0 { 1.0 } else { 0.0 };
+                b.opacity_curve = eased_root(&csp_curve(&p.points, p.least));
+            }
+            None => b.pressure_opacity = 0.0,
+        }
+        b.set_setting("tilt_opacity", taken(unwound(d.tilt.as_ref().map(|t| t.least))));
+        chance = chance.max(taken(d.random));
+    }
+    if let Some(d) = &pen.flow {
+        let (amount, curve) = pressed(d).map_or((0.0, None), |(amount, p)| (amount, Some(csp_curve(&p.points, 0.0))));
+        b.set_setting("pressure_flow", amount);
+        b.pressure_curves.set(PressureCurve::Flow, curve);
+        chance = chance.max(taken(d.random));
+    }
+    if pen.opacity.is_some() || pen.flow.is_some() {
+        b.set_setting("jitter_opacity", chance);
+    }
+    if let Some(d) = &pen.thickness {
+        let (amount, curve) = pressed(d).map_or((0.0, None), |(amount, p)| (amount, Some(csp_curve(&p.points, 0.0))));
+        b.set_setting("pressure_roundness", amount);
+        b.pressure_curves.set(PressureCurve::Roundness, curve);
+        b.set_setting("tilt_roundness", taken(d.tilt.as_ref().map(|t| t.least)));
+        b.set_setting("roundness_jitter_y", taken(d.random));
+    }
+}
+
+/// Gives `b` a Clip Studio sub tool's start and end, for a pen and a finger alike: as long as its
+/// own (as classic tapers, over canvas pixels; one kept as a share of the stroke taken of a stroke
+/// as long as a full taper), thinning and fading as far as it says.
+fn csp_taper(b: &mut Brush, t: &procraft_engine::csp::CspTaper) {
+    let span = procraft_engine::brush::CLASSIC_TAPER_SPAN;
+    let length = |l: Option<f32>| l.map_or(0.0, |l| if t.of_stroke { l } else { l / span });
+    b.set_setting("classic_taper", 1.0);
+    for tool in ["pen", "touch"] {
+        for (part, value) in
+            [("start", length(t.start)), ("end", length(t.end)), ("size", t.size), ("opacity", t.opacity)]
+        {
+            b.set_setting(&format!("{tool}_taper_{part}"), value);
+        }
+    }
+}
+
+/// A Clip Studio texture's picture of no more than this many pixels a side is a pattern of pixels
+/// (a dither's), its grain read sharp.
+const CSP_PIXEL_PATTERN: u32 = 64;
+
+/// Gives `b` a Clip Studio texture as its grain, fixed to the canvas as paper is: the ink its
+/// picture lays (which the grain lets through; reversed, where it lays none), tiled at the size of
+/// the picture itself times its scale, as strongly as its density says (its differences made
+/// stronger: from half of it on, fully), combined with the stroke by the nearest of its modes.
+fn csp_paper(b: &mut Brush, t: &procraft_engine::csp::CspTexture) {
+    use procraft_engine::csp::TextureMode as M;
+    use procraft_engine::document::BlendMode;
+    let Some(ink) = t.pngs.iter().find_map(|png| csp_ink(png)) else { return };
+    // its thumbnail may be smaller than the picture
+    let own = t.width.filter(|w| *w > 0).map_or(1.0, |w| w as f32 / ink.width.max(1) as f32);
+    let depth = t.density.unwrap_or(1.0) * if t.emphasized { 2.0 } else { 1.0 };
+    let png = sized_gray_png(ink.width, ink.height, &ink.pixels);
+    paper(b, &[png], t.reverse, depth.min(1.0), t.scale.unwrap_or(1.0) * own);
+    if b.grain.source.is_none() {
+        return;
+    }
+    let mode = match t.mode {
+        M::Subtract => BlendMode::Subtract.id(),
+        M::Compare => BlendMode::Darken.id(),
+        M::Overlay => BlendMode::Overlay.id(),
+        M::ColorDodge => BlendMode::ColorDodge.id(),
+        M::HardMix => BlendMode::HardMix.id(),
+        M::Height => procraft_engine::brush::GRAIN_HEIGHT,
+        M::Normal | M::Multiply | M::Other => BlendMode::Multiply.id(),
+    };
+    // a lighter picture lays less ink, which the grain is (reversed, more)
+    let lighter = if t.reverse { 1.0 } else { -1.0 };
+    for (key, value) in [
+        ("grain_behavior", 1.0),
+        ("grain_blend", mode as f32),
+        ("grain_brightness", lighter * t.brightness),
+        ("grain_contrast", t.contrast),
+        // a share of a half turn either way
+        ("grain_turn", (t.rotation / std::f32::consts::PI + 1.0).rem_euclid(2.0) - 1.0),
+    ] {
+        b.set_setting(key, value);
+    }
+    if ink.width.max(ink.height) <= CSP_PIXEL_PATTERN {
+        b.set_setting("grain_filtering", 0.0);
+    }
+}
+
+/// A Clip Studio material's picture (PNG) as the ink it lays, a tip of it: its dark parts as far
+/// as they are opaque (a material is dark on clear, or a picture on white); a picture with next to
+/// no dark in it (light on clear) by how opaque it is. None if it lays none, or isn't a picture.
+fn csp_ink(png: &[u8]) -> Option<procraft_engine::abr::AbrTip> {
+    let (w, h, channels, buf) = decode_picture(png)?;
+    let (dark, cover): (Vec<u8>, Vec<u8>) = buf
+        .chunks_exact(channels.max(1))
+        .take(w * h)
+        .map(|px| {
+            let get = |k: usize| u32::from(px.get(k).copied().unwrap_or(0));
+            let (grey, alpha) = match channels {
+                1 => (get(0), 255),
+                2 => (get(0), get(1)),
+                3 => ((get(0) * 299 + get(1) * 587 + get(2) * 114) / 1000, 255),
+                _ => ((get(0) * 299 + get(1) * 587 + get(2) * 114) / 1000, get(3)),
+            };
+            (((255 - grey.min(255)) * alpha / 255) as u8, alpha.min(255) as u8)
+        })
+        .unzip();
+    let sum = |v: &[u8]| v.iter().map(|&x| u64::from(x)).sum::<u64>();
+    // the dark under one fiftieth of what the coverage lays: light on clear
+    let pixels = if sum(&dark) * 50 < sum(&cover) { cover } else { dark };
+    (pixels.len() == w * h && pixels.iter().any(|&v| v > 0)).then(|| procraft_engine::abr::AbrTip {
+        name: String::new(),
+        spacing: None,
+        width: w as u32,
+        height: h as u32,
+        pixels,
+    })
 }
 
 /// Gives `b` another app's texture as its grain, paper the stroke paints through: the first of
@@ -541,7 +942,8 @@ fn generated_brush(g: &procraft_engine::gbr::Generated) -> Brush {
         Some(tip) => tip_brush(&tip),
         None => {
             let mut b = Brush { name: g.name.clone(), ..Brush::round_pen() };
-            b.hardness = g.hardness;
+            // ours paints half halfway between its hardness and its edge: where GIMP's does
+            b.hardness = (2.0 * procraft_engine::gbr::generated_half(g.hardness) - 1.0).clamp(0.0, 1.0);
             b.shape.roundness = (1.0 / g.aspect).clamp(0.01, 1.0);
             b
         }
@@ -551,11 +953,27 @@ fn generated_brush(g: &procraft_engine::gbr::Generated) -> Brush {
     b
 }
 
+/// A tip larger than a `Source` holds, fitted into a square as [`fitted`] fits it, as large as the
+/// tip goes (a power of two no larger than its longer side, up to [`FULL_GRAIN_MOST`]): drawn large,
+/// a stamp then shows the tip's own detail rather than the small square's blown up. None for a
+/// tip no larger than a `Source`.
+fn full_tip(t: &procraft_engine::abr::AbrTip) -> Option<FullGrain> {
+    let longest = t.width.max(t.height) as usize;
+    let side = (1usize << longest.max(1).ilog2()).min(FULL_GRAIN_MOST);
+    (side > TEXTURE_SIZE).then(|| FullGrain::new(side as u32, fitted_at(t, side))).flatten()
+}
+
+/// `b`'s shape as the sampled tip `t`: the small square, and the tip at its own size beside it.
+fn give_tip(b: &mut Brush, t: &procraft_engine::abr::AbrTip) {
+    b.shape.image = None;
+    b.shape.source = Source::new(fitted(t));
+    b.shape_file = b.shape.source.as_ref().zip(full_tip(t)).map(|(source, full)| ShapeFile { source: source.id, full });
+}
+
 /// A brush of a sampled tip: its shape, with its spacing.
 fn tip_brush(t: &procraft_engine::abr::AbrTip) -> Brush {
     let mut b = Brush { name: t.name.clone(), ..Brush::round_pen() };
-    b.shape.image = None;
-    b.shape.source = Source::new(fitted(t));
+    give_tip(&mut b, t);
     if let Some(spacing) = t.spacing {
         b.spacing = Brush::spacing_within_reach(spacing);
     }
@@ -565,21 +983,16 @@ fn tip_brush(t: &procraft_engine::abr::AbrTip) -> Brush {
 /// A brush of a Krita preset: its tip (round, or an image), spacing, angle, and what pressure
 /// changes.
 fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
-    use procraft_engine::krita::{KritaPicture, KritaTip};
-    let image = match &k.tip {
+    use procraft_engine::krita::KritaTip;
+    let tip = match &k.tip {
         KritaTip::Round { .. } => None,
-        KritaTip::Image(t) => Some(fitted(t)),
-        KritaTip::Png(png) => png_tip(png, false).map(|t| fitted(&t)),
+        KritaTip::Image(t) => Some(t.clone()),
+        KritaTip::Png(png) => png_tip(png, false),
     };
-    let mut b = match image {
-        Some(pixels) => {
-            let mut b = Brush { name: k.name.clone(), ..Brush::round_pen() };
-            b.shape.image = None;
-            b.shape.source = Source::new(pixels);
-            b
-        }
-        None => Brush { name: k.name.clone(), ..Brush::round_pen() },
-    };
+    let mut b = Brush { name: k.name.clone(), ..Brush::round_pen() };
+    if let Some(t) = &tip {
+        give_tip(&mut b, t);
+    }
     if let KritaTip::Round { hardness, roundness } = k.tip {
         b.hardness = hardness.clamp(0.0, 1.0);
         b.shape.roundness = roundness.clamp(0.05, 1.0);
@@ -595,25 +1008,65 @@ fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
         // a half turn either way: any angle
         b.shape.scatter = 1.0;
     }
-    if !k.pressure_size {
-        b.pressure_size = 0.0;
+    b.shape.scatter = b.shape.scatter.max(k.rotation_random);
+    if k.rotation_per_stroke {
+        b.shape.randomise = true;
     }
-    if k.pressure_opacity {
-        b.pressure_opacity = 1.0;
+    if k.follows_tilt {
+        b.shape.follow_azimuth = true;
     }
+    for (key, on) in [("flip_x", k.mirror.0), ("flip_y", k.mirror.1)] {
+        if on {
+            b.set_setting(key, 1.0);
+        }
+    }
+    if let Some(s) = &k.scatter {
+        krita_scatter(&mut b, s);
+    }
+    // its colour changed at random each stamp, or each stroke
+    for (keys, amounts) in [
+        (["stamp_hue", "stamp_saturation", "stamp_lightness", "stamp_darkness"], k.color_random),
+        (["stroke_hue", "stroke_saturation", "stroke_lightness", "stroke_darkness"], k.color_per_stroke),
+    ] {
+        for (key, amount) in keys.into_iter().zip(amounts) {
+            if amount > 0.0 {
+                b.set_setting(key, amount);
+            }
+        }
+    }
+    // flattened at random, or by the pressure
+    if k.ratio_random > 0.0 {
+        b.set_setting("roundness_jitter_y", k.ratio_random);
+    }
+    // the secondary colour (Krita's background) where pressure leaves its colour out
+    if let Some(points) = &k.mix_pressure {
+        let left: Vec<procraft_engine::geom::Vec2> =
+            points.iter().map(|p| procraft_engine::geom::Vec2::new(p.x, 1.0 - p.y.clamp(0.0, 1.0))).collect();
+        b.set_setting("pressure_secondary", 1.0);
+        b.pressure_curves.set(procraft_engine::brush::PressureCurve::Secondary, Some(Curve::new(&left)));
+    }
+    if let Some(points) = &k.ratio_pressure {
+        b.set_setting("pressure_roundness", 1.0);
+        b.pressure_curves.set(procraft_engine::brush::PressureCurve::Roundness, Some(Curve::new(points)));
+    }
+    // the size from nothing up to all of it along its pressure curve, if pressure drives it
+    match &k.size_pressure {
+        Some(points) => {
+            b.pressure_size = 1.0;
+            b.size_curve = Curve::new(points);
+        }
+        None => b.pressure_size = 0.0,
+    }
+    krita_paint(&mut b, k.opacity, k.flow, k.opacity_pressure.as_deref(), k.flow_pressure.as_deref(), k.wash);
     if let Some(t) = &k.texture {
-        let png = match &t.picture {
-            KritaPicture::Encoded(png) => png.clone(),
-            KritaPicture::Grey(g) => sized_gray_png(g.width, g.height, &g.pixels),
-        };
-        paper(&mut b, &[png], t.invert, t.strength, t.scale);
+        krita_paper(&mut b, t, &k.name);
     }
     // a masking brush is a dual brush's second: its size a share of this one's, its coverage
     // combined with this one's by the nearest of the modes
     if let Some(m) = &k.masking {
         let mut second = krita_brush(&m.brush);
         second.min_size = b.min_size * m.size;
-        second.max_size = b.max_size * m.size;
+        second.max_size = (b.max_size * m.size).min(second.most_size() * second.size_unit());
         masking_paint(&mut second, m);
         b.secondary = Some(Box::new(second));
         let mode = masking_mode(&m.op).unwrap_or_else(|| {
@@ -628,31 +1081,128 @@ fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
     b
 }
 
-/// Gives a masking brush's second how much it lays, as Krita's wash mode (the only one it masks
-/// in) has it: each stamp lays its flow, through its pressure curve, towards the most the stroke
-/// may reach, which is its opacity through its own.
-fn masking_paint(second: &mut Brush, m: &procraft_engine::krita::KritaMasking) {
-    use procraft_engine::brush::{FLOW_POWER, PressureCurve};
+/// Gives `b` a Krita preset's texture as its grain: the mask Krita makes of its picture (light
+/// keeping the paint where it multiplies), as deep as its strength, combined with each stamp by
+/// the nearest of the modes to Krita's.
+fn krita_paper(b: &mut Brush, t: &procraft_engine::krita::KritaTexture, name: &str) {
+    use procraft_engine::krita::KritaPicture;
+    let mask = |grey: f32, alpha: f32| (t.mask_value(grey / 255.0, alpha / 255.0) * 255.0).round() as u8;
+    let picture = match &t.picture {
+        KritaPicture::Encoded(png) => decode_picture(png).map(|(w, h, channels, buf)| {
+            let pixels = buf
+                .chunks_exact(channels.max(1))
+                .take(w * h)
+                .map(|px| {
+                    let get = |k: usize| f32::from(px.get(k).copied().unwrap_or(0));
+                    // Krita's grey: its own weights of red, green and blue, in 32nds
+                    let grey = || ((11.0 * get(0) + 16.0 * get(1) + 5.0 * get(2)) / 32.0).floor();
+                    match channels {
+                        1 => mask(get(0), 255.0),
+                        2 => mask(get(0), get(1)),
+                        3 => mask(grey(), 255.0),
+                        _ => mask(grey(), get(3)),
+                    }
+                })
+                .collect::<Vec<u8>>();
+            (w as u32, h as u32, pixels)
+        }),
+        KritaPicture::Grey(g) => {
+            Some((g.width, g.height, g.pixels.iter().map(|&v| mask(f32::from(v), 255.0)).collect()))
+        }
+    };
+    let Some((w, h, pixels)) = picture else { return };
+    paper(b, &[sized_gray_png(w, h, &pixels)], false, t.strength, t.scale);
+    if b.grain.source.is_none() {
+        return;
+    }
+    let mode = t.op().and_then(masking_mode).unwrap_or_else(|| {
+        log::warn!("Krita preset \"{name}\": texturing mode {} combines as multiply", t.mode);
+        procraft_engine::document::BlendMode::Multiply.id()
+    });
+    b.set_setting("grain_blend", mode as f32);
+}
+
+/// The curve that, eased as a stamp's opacity is (to the power
+/// [`procraft_engine::brush::FLOW_POWER`]), lays what `curve` says: its root, taken across it (at 17
+/// places and at its own points, so a straight one bends as it should).
+fn eased_root(curve: &Curve) -> Curve {
+    use procraft_engine::brush::FLOW_POWER;
     use procraft_engine::geom::Vec2;
-    second.max_opacity = 1.0;
-    second.flow = m.flow;
-    // a stamp lays its opacity's pressure to the power FLOW_POWER: the curve's root lays the curve
-    second.pressure_opacity = 0.0;
-    if let Some(points) = &m.flow_pressure {
-        let root: Vec<Vec2> = points.iter().map(|p| Vec2::new(p.x, p.y.max(0.0).powf(1.0 / FLOW_POWER))).collect();
-        second.pressure_opacity = 1.0;
-        second.opacity_curve = Curve::new(&root);
+    let places = (0..=16).map(|i| i as f32 / 16.0).chain(curve.points().iter().map(|p| p.x));
+    Curve::new(&places.map(|x| Vec2::new(x, curve.eval(x).max(0.0).powf(1.0 / FLOW_POWER))).collect::<Vec<_>>())
+}
+
+/// Gives `b` a Krita preset's scatter as jitter along the stroke and across it: as far at most
+/// (its amount of diameters, up to as far as our jitter reaches) and as the pressure lets it.
+fn krita_scatter(b: &mut Brush, s: &procraft_engine::krita::KritaScatter) {
+    use procraft_engine::brush::PressureCurve;
+    let control = jitter_control(b, s.amount);
+    let curve = s.pressure.as_deref().map(Curve::new);
+    for (on, key, by) in [
+        (s.along, "jitter_linear", PressureCurve::LinearJitter),
+        (s.across, "jitter_lateral", PressureCurve::LateralJitter),
+    ] {
+        if on {
+            b.set_setting(key, control);
+            b.pressure_curves.set(by, curve.clone());
+        }
+    }
+}
+
+/// Gives a masking brush's second how much it lays, as Krita's wash mode (the only one it masks
+/// in) has it (see [`krita_paint`]).
+fn masking_paint(second: &mut Brush, m: &procraft_engine::krita::KritaMasking) {
+    krita_paint(second, m.opacity, m.flow, m.opacity_pressure.as_deref(), m.flow_pressure.as_deref(), true);
+}
+
+/// Gives `b` how much a Krita brush lays, its `opacity` and `flow` each scaled by its pressure
+/// curve, if it has one. In wash mode each stamp lays the flow, towards the most the stroke may
+/// reach, which is the opacity; built up, each stamp lays the opacity times the flow.
+fn krita_paint(
+    b: &mut Brush,
+    opacity: f32,
+    flow: f32,
+    opacity_pressure: Option<&[procraft_engine::geom::Vec2]>,
+    flow_pressure: Option<&[procraft_engine::geom::Vec2]>,
+    wash: bool,
+) {
+    use procraft_engine::brush::PressureCurve;
+    use procraft_engine::geom::Vec2;
+    b.max_opacity = 1.0;
+    let rooted = |points: &[Vec2]| eased_root(&Curve::new(points));
+    b.pressure_opacity = 0.0;
+    if !wash {
+        b.flow = opacity * flow;
+        // both curves at once, multiplied across
+        let laid: Option<Vec<Vec2>> = match (opacity_pressure, flow_pressure) {
+            (None, None) => None,
+            (Some(one), None) | (None, Some(one)) => Some(one.to_vec()),
+            (Some(o), Some(f)) => {
+                let (o, f) = (Curve::new(o), Curve::new(f));
+                Some((0..=16).map(|i| i as f32 / 16.0).map(|x| Vec2::new(x, o.eval(x) * f.eval(x))).collect())
+            }
+        };
+        if let Some(points) = laid {
+            b.pressure_opacity = 1.0;
+            b.opacity_curve = rooted(&points);
+        }
+        return;
+    }
+    b.flow = flow;
+    if let Some(points) = flow_pressure {
+        b.pressure_opacity = 1.0;
+        b.opacity_curve = rooted(points);
     }
     // the stroke builds up towards what its transfer lets through: the opacity, by the pressure
-    let most = match &m.opacity_pressure {
-        Some(points) => points.iter().map(|p| Vec2::new(p.x, p.y * m.opacity)).collect(),
-        None => vec![Vec2::new(0.0, m.opacity), Vec2::new(1.0, m.opacity)],
+    let most = match opacity_pressure {
+        Some(points) => points.iter().map(|p| Vec2::new(p.x, p.y * opacity)).collect(),
+        None => vec![Vec2::new(0.0, opacity), Vec2::new(1.0, opacity)],
     };
-    if m.opacity_pressure.is_some() || m.opacity < 1.0 {
-        second.set_setting("pressure_flow", 1.0);
-        second.pressure_curves.set(PressureCurve::Flow, Some(Curve::new(&most)));
+    if opacity_pressure.is_some() || opacity < 1.0 {
+        b.set_setting("pressure_flow", 1.0);
+        b.pressure_curves.set(PressureCurve::Flow, Some(Curve::new(&most)));
     }
-    second.set_setting("rendering_mode", 1.0);
+    b.set_setting("rendering_mode", 1.0);
 }
 
 /// The dual mode nearest a Krita masking brush's composite op (by Krita's name for it), if there
@@ -1239,6 +1789,195 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_small_tip_is_drawn_up_smoothly_and_a_large_one_down_by_its_average() {
+        use procraft_engine::abr::AbrTip;
+        // two pixels side by side, black and white: drawn up, grey between them, not two blocks
+        let small = AbrTip { name: String::new(), spacing: None, width: 2, height: 2, pixels: vec![0, 255, 0, 255] };
+        let n = TEXTURE_SIZE;
+        let up = fitted(&small);
+        let row: Vec<u8> = up[n / 2 * n..n / 2 * n + n].to_vec();
+        assert_eq!((row[0], row[n - 1]), (0, 255));
+        assert!(row.windows(2).all(|p| p[0] <= p[1]), "rising from black to white");
+        let between = row.iter().filter(|&&v| v > 10 && v < 245).count();
+        assert!(between > n / 4, "{between} pixels between");
+        // a tip twice the square's size, in 2x2 checks: each pixel the average of the four it covers
+        let big = AbrTip {
+            name: String::new(),
+            spacing: None,
+            width: 2 * n as u32,
+            height: 2 * n as u32,
+            pixels: (0..4 * n * n)
+                .map(|i| if (i % (2 * n) + i / (2 * n)).is_multiple_of(2) { 255 } else { 0 })
+                .collect(),
+        };
+        assert!(fitted(&big).iter().all(|&v| v == 127));
+    }
+
+    #[test]
+    fn a_krita_texture_is_its_mask_combined_by_its_mode() {
+        use procraft_engine::document::BlendMode;
+        use procraft_engine::krita::{KritaBrush, KritaPicture, KritaTexture, KritaTip};
+        // black dots on clear, which Krita takes as white about them
+        let dots: Vec<u8> = (0..16 * 16).flat_map(|i| [0, 0, 0, if i % 4 == 0 { 255 } else { 0 }]).collect();
+        let texture = KritaTexture {
+            picture: KritaPicture::Encoded(crate::project::rgba_png(16, 16, &dots)),
+            scale: 1.0,
+            strength: 1.0,
+            invert: false,
+            mode: 1,
+            brightness: 0.0,
+            contrast: 1.0,
+            neutral: 0.5,
+            cutoff: (0, 0.0, 1.0),
+        };
+        let brush = |texture: KritaTexture| {
+            krita_brush(&KritaBrush {
+                name: "Paper".into(),
+                tip: KritaTip::Round { hardness: 1.0, roundness: 1.0 },
+                spacing: None,
+                angle: 0.0,
+                follows: false,
+                turns_at_random: false,
+                rotation_random: 0.0,
+                rotation_per_stroke: false,
+                follows_tilt: false,
+                mirror: (false, false),
+                scatter: None,
+                color_random: [0.0; 4],
+                color_per_stroke: [0.0; 4],
+                ratio_random: 0.0,
+                ratio_pressure: None,
+                mix_pressure: None,
+                size_pressure: None,
+                opacity_pressure: None,
+                flow_pressure: None,
+                opacity: 1.0,
+                flow: 1.0,
+                wash: true,
+                texture: Some(texture),
+                missing: Vec::new(),
+                masking: None,
+            })
+        };
+        let b = brush(texture.clone());
+        let source = b.grain.source.as_ref().unwrap();
+        let (dark, light) =
+            (source.pixels.iter().filter(|&&v| v == 0).count(), source.pixels.iter().filter(|&&v| v == 255).count());
+        assert!(dark > 0 && light > 3 * dark, "{dark} {light}");
+        // subtracted, as it says; multiplied otherwise, and where a mode has no near one of ours
+        assert_eq!(b.setting("grain_blend"), BlendMode::Subtract.id() as f32);
+        assert_eq!(
+            brush(KritaTexture { mode: 0, ..texture.clone() }).setting("grain_blend"),
+            BlendMode::Multiply.id() as f32
+        );
+        assert_eq!(brush(KritaTexture { mode: 2, ..texture }).setting("grain_blend"), BlendMode::Multiply.id() as f32);
+    }
+
+    #[test]
+    fn a_krita_brush_follows_the_pen_and_lays_as_its_painting_mode_says() {
+        use procraft_engine::brush::{FLOW_POWER, PressureCurve};
+        use procraft_engine::geom::Vec2;
+        use procraft_engine::krita::{KritaBrush, KritaTip};
+        let near = |a: f32, b: f32| (a - b).abs() < 2e-3;
+        let straight = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)];
+        let built = KritaBrush {
+            name: "Pen".into(),
+            tip: KritaTip::Round { hardness: 1.0, roundness: 1.0 },
+            spacing: None,
+            angle: 0.0,
+            follows: false,
+            turns_at_random: false,
+            rotation_random: 0.0,
+            rotation_per_stroke: false,
+            follows_tilt: false,
+            mirror: (false, false),
+            scatter: None,
+            color_random: [0.0; 4],
+            color_per_stroke: [0.0; 4],
+            ratio_random: 0.0,
+            ratio_pressure: None,
+            mix_pressure: None,
+            size_pressure: Some(vec![Vec2::new(0.0, 0.2), Vec2::new(1.0, 1.0)]),
+            opacity_pressure: Some(straight.clone()),
+            flow_pressure: None,
+            opacity: 0.8,
+            flow: 0.5,
+            wash: false,
+            texture: None,
+            missing: Vec::new(),
+            masking: None,
+        };
+        // the size from its curve's least up to all of it
+        let b = krita_brush(&built);
+        assert!(b.pressure_size == 1.0 && near(b.size_curve.eval(0.0), 0.2) && near(b.size_curve.eval(1.0), 1.0));
+        // built up: each stamp lays the opacity times the flow, by the opacity's curve once eased
+        assert!(near(b.flow, 0.4) && b.pressure_opacity == 1.0);
+        assert!(near(b.opacity_curve.eval(0.5).powf(FLOW_POWER), 0.5));
+        // washed: each stamp lays the flow, the stroke building up to the opacity by the pressure
+        let w = krita_brush(&KritaBrush { wash: true, ..built.clone() });
+        assert!(near(w.flow, 0.5) && w.pressure_opacity == 0.0 && w.setting("rendering_mode") == 1.0);
+        let most = w.pressure_curves.get(PressureCurve::Flow).unwrap();
+        assert!(near(most.eval(0.5), 0.4) && near(most.eval(1.0), 0.8));
+        // no pressure on the size: it stays as set
+        assert_eq!(krita_brush(&KritaBrush { size_pressure: None, ..built }).pressure_size, 0.0);
+    }
+
+    #[test]
+    fn a_krita_brush_turns_mirrors_and_scatters_as_its_preset_says() {
+        use procraft_engine::brush::PressureCurve;
+        use procraft_engine::geom::Vec2;
+        use procraft_engine::krita::{KritaBrush, KritaScatter, KritaTip};
+        let straight = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)];
+        let k = KritaBrush {
+            name: "Spray".into(),
+            tip: KritaTip::Round { hardness: 1.0, roundness: 1.0 },
+            spacing: None,
+            angle: 0.0,
+            follows: false,
+            turns_at_random: false,
+            rotation_random: 0.6,
+            rotation_per_stroke: true,
+            follows_tilt: true,
+            mirror: (true, false),
+            scatter: Some(KritaScatter { amount: 0.5, pressure: Some(straight), along: true, across: false }),
+            color_random: [0.4, 0.0, 0.3, 0.3],
+            color_per_stroke: [0.0, 0.5, 0.0, 0.0],
+            ratio_random: 0.7,
+            ratio_pressure: None,
+            mix_pressure: None,
+            size_pressure: None,
+            opacity_pressure: None,
+            flow_pressure: None,
+            opacity: 1.0,
+            flow: 1.0,
+            wash: true,
+            texture: None,
+            missing: Vec::new(),
+            masking: None,
+        };
+        let b = krita_brush(&k);
+        assert!((b.shape.scatter - 0.6).abs() < 1e-6 && b.shape.randomise && b.shape.follow_azimuth);
+        assert_eq!((b.setting("flip_x"), b.setting("flip_y")), (1.0, 0.0));
+        // half a diameter at most along the stroke: our jitter's control to the power 2.2, times its
+        // scale, of half the round stamp's diagonal; by the pressure; none across
+        let thrown =
+            procraft_engine::stroke::JITTER_FILE_SCALE * b.setting("jitter_linear").powf(2.2) * 0.5 * 2f32.sqrt();
+        assert!((thrown - 0.5).abs() < 1e-3, "{thrown}");
+        assert!(b.pressure_curves.get(PressureCurve::LinearJitter).is_some());
+        assert!(b.pressure_curves.get(PressureCurve::LateralJitter).is_none());
+        // its colour at random each stamp and each stroke, and flattened at random
+        let stamp = ["stamp_hue", "stamp_saturation", "stamp_lightness", "stamp_darkness"].map(|k| b.setting(k));
+        assert_eq!((stamp, b.setting("stroke_saturation")), ([0.4, 0.0, 0.3, 0.3], 0.5));
+        assert_eq!(b.setting("roundness_jitter_y"), 0.7);
+        // its colour by the pressure: the secondary colour where light, its own where full
+        let mixed =
+            krita_brush(&KritaBrush { mix_pressure: Some(vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)]), ..k });
+        let curve = mixed.pressure_curves.get(PressureCurve::Secondary).unwrap();
+        assert_eq!(mixed.setting("pressure_secondary"), 1.0);
+        assert!((curve.eval(0.0) - 1.0).abs() < 1e-3 && curve.eval(1.0).abs() < 1e-3);
+    }
+
+    #[test]
     fn a_masking_brush_lays_as_krita_s_wash_mode_does() {
         use procraft_engine::brush::{FLOW_POWER, PressureCurve, Rendering};
         use procraft_engine::geom::Vec2;
@@ -1250,8 +1989,25 @@ mod tests {
             angle: 0.0,
             follows: false,
             turns_at_random: false,
-            pressure_size: true,
-            pressure_opacity: true,
+            rotation_random: 0.0,
+            rotation_per_stroke: false,
+            follows_tilt: false,
+            mirror: (false, false),
+            scatter: None,
+            color_random: [0.0; 4],
+            color_per_stroke: [0.0; 4],
+            ratio_random: 0.0,
+            ratio_pressure: None,
+            mix_pressure: None,
+            size_pressure: Some(vec![
+                procraft_engine::geom::Vec2::new(0.0, 0.0),
+                procraft_engine::geom::Vec2::new(1.0, 1.0),
+            ]),
+            opacity_pressure: None,
+            flow_pressure: None,
+            opacity: 1.0,
+            flow: 1.0,
+            wash: true,
             texture: None,
             missing: Vec::new(),
             masking: None,
@@ -1363,17 +2119,13 @@ mod tests {
         let paper = crate::project::rgba_png(64, 64, &px);
         let c = procraft_engine::csp::CspBrush {
             name: "Pencil".into(),
-            hardness: None,
-            spacing: None,
-            roundness: None,
-            angle: 0.0,
-            tip_pngs: Vec::new(),
             texture: Some(procraft_engine::csp::CspTexture {
                 pngs: vec![b"not a picture".to_vec(), crate::project::rgba_png(8, 8, &[0; 256]), paper],
                 density: Some(0.6),
                 scale: Some(2.0),
-                reverse: false,
+                ..Default::default()
             }),
+            ..Default::default()
         };
         let b = csp_brush(&c);
         // the picture that reads and isn't blank, shown at 60 %, its 64 px tiles twice as big
@@ -1382,6 +2134,312 @@ mod tests {
         // none: no grain
         let plain = csp_brush(&procraft_engine::csp::CspBrush { texture: None, ..c });
         assert!(plain.grain.source.is_none());
+    }
+
+    #[test]
+    fn a_sub_tools_texture_comes_at_its_pictures_own_size_with_its_settings() {
+        use procraft_engine::csp::{CspBrush, CspTexture, TextureMode};
+        let shown = |b: &Brush, key: &str| (b.setting(key) * 100.0).round() / 100.0;
+        // a thumbnail 100 px wide of a picture 600 px wide, black dots on clear
+        let dots: Vec<u8> = (0..100 * 100).flat_map(|i| [0, 0, 0, if i % 7 == 0 { 255 } else { 0 }]).collect();
+        let t = CspTexture {
+            pngs: vec![crate::project::rgba_png(100, 100, &dots)],
+            width: Some(600),
+            density: Some(0.3),
+            scale: Some(0.5),
+            mode: TextureMode::Subtract,
+            rotation: 270f32.to_radians(),
+            brightness: 0.4,
+            contrast: -0.2,
+            ..Default::default()
+        };
+        let c = CspBrush { name: "Chalk".into(), texture: Some(t.clone()), ..Default::default() };
+        let b = csp_brush(&c);
+        // tiled at half the picture's 600 px, fixed to the canvas, 30 % deep, taking paint away
+        assert_eq!((b.grain.scale, b.grain.mode, b.grain.depth), (300.0, GrainMode::Texturized, 0.3));
+        assert_eq!(b.setting("grain_blend") as u32, procraft_engine::document::BlendMode::Subtract.id());
+        // lighter is less ink; three quarters round is a quarter back; smooth, not a pixel pattern
+        let kept = ["grain_brightness", "grain_contrast", "grain_turn", "grain_filtering"].map(|k| shown(&b, k));
+        assert_eq!(kept, [-0.4, -0.2, -0.5, 2.0]);
+        // reversed, lighter is more; its differences made stronger: from half its density on, fully
+        let reversed = csp_brush(&CspBrush {
+            texture: Some(CspTexture { reverse: true, emphasized: true, density: Some(0.6), ..t.clone() }),
+            ..c.clone()
+        });
+        assert_eq!((shown(&reversed, "grain_brightness"), reversed.grain.depth), (0.4, 1.0));
+        // a dither's few pixels, at its own size (no material size given): read sharp
+        let dither: Vec<u8> = (0..25).flat_map(|i| [0, 0, 0, if i == 0 { 255 } else { 0 }]).collect();
+        let pattern = CspTexture { pngs: vec![crate::project::rgba_png(5, 5, &dither)], width: None, scale: None, ..t };
+        let b = csp_brush(&CspBrush { texture: Some(pattern), ..c });
+        assert_eq!((b.grain.scale, shown(&b, "grain_filtering")), (5.0, 0.0));
+    }
+
+    #[test]
+    fn a_large_sampled_tip_keeps_its_own_detail_beside_the_small_square() {
+        use procraft_engine::abr::AbrTip;
+        // a tip twice as wide as tall, solid across its top half and shading off left to right below
+        let tip = |w: u32, h: u32| AbrTip {
+            name: "Tip".into(),
+            spacing: None,
+            width: w,
+            height: h,
+            pixels: (0..w * h).map(|i| if i / w < h / 2 { 255 } else { (255 - (i % w) * 255 / w) as u8 }).collect(),
+        };
+        let b = tip_brush(&tip(600, 300));
+        let full = &b.shape_file.as_ref().expect("a full shape").full;
+        assert_eq!(full.side, 512);
+        assert_eq!(b.shape_file.as_ref().unwrap().source, b.shape.source.as_ref().unwrap().id);
+        // framed as the small square is: the tip across the middle, as wide as the square
+        let small = &b.shape.source.as_ref().unwrap().pixels;
+        let pixels = full.pixels.as_deref().unwrap();
+        let (n, m) = (TEXTURE_SIZE, 512usize);
+        for (x, y) in [(10, 70), (128, 100), (250, 120), (128, 20), (128, 200), (60, 160)] {
+            let big = (0..4).map(|k| u32::from(pixels[(y * 2 + k / 2) * m + x * 2 + k % 2])).sum::<u32>() / 4;
+            assert!((big as i32 - i32::from(small[y * n + x])).abs() <= 2, "({x}, {y}): {big} {}", small[y * n + x]);
+        }
+        // no larger than a `Source` holds: none; very large: as large as is kept
+        assert!(tip_brush(&tip(200, 100)).shape_file.is_none());
+        assert_eq!(tip_brush(&tip(3000, 1500)).shape_file.unwrap().full.side, 1024);
+    }
+
+    #[test]
+    fn a_sprayed_sub_tool_lays_its_particles_about_each_place() {
+        use procraft_engine::csp::{CspBrush, CspSpray};
+        use procraft_engine::stroke::JITTER_FILE_SCALE;
+        let spray = CspSpray {
+            particle: 10.0,
+            density: 24,
+            density_by: None,
+            bias: -1.0,
+            angle: 0.0,
+            random_turn: 0.5,
+            follows: false,
+        };
+        let c = CspBrush {
+            name: "Spray".into(),
+            size: Some(40.0),
+            hardness: Some(1.0),
+            spacing: Some(0.2),
+            spray: Some(spray.clone()),
+            ..Default::default()
+        };
+        let b = csp_brush(&c);
+        // a stamp as wide as the area, its particle (a quarter of it) in its middle
+        let pixels = &b.shape.source.as_ref().unwrap().pixels;
+        let n = TEXTURE_SIZE;
+        let at = |x: usize, y: usize| pixels[y * n + x];
+        assert_eq!(at(n / 2, n / 2), 255);
+        assert!(at(n / 2 + n / 8 - 4, n / 2) > 200 && at(n / 2, n / 2 - n / 8 + 4) > 200);
+        assert_eq!((at(n / 2 + n / 8 + 4, n / 2), at(4, 4)), (0, 0));
+        // as many to a place as ours lays, turned half way at random, the area round
+        assert_eq!((b.shape.count, b.shape.scatter, b.shape.roundness), (16, 0.5, 1.0));
+        assert!((b.spacing - 0.2).abs() < 1e-5, "{}", b.spacing);
+        // each thrown as far as half the area, either way along the stroke and across it
+        let reach = |b: &Brush| JITTER_FILE_SCALE * b.setting("jitter_lateral").powf(2.2) * 0.5 * 2f32.sqrt();
+        assert!((reach(&b) - 0.5).abs() < 1e-3, "{}", reach(&b));
+        assert_eq!(b.setting("jitter_linear"), b.setting("jitter_lateral"));
+        // a particle larger than the area: the stamp as large as it, thrown half the area (a
+        // quarter of the stamp), spaced by the area still
+        let big = csp_brush(&CspBrush { spray: Some(CspSpray { particle: 80.0, ..spray.clone() }), ..c.clone() });
+        assert!((big.max_size / b.max_size - 2.0).abs() < 1e-4, "{} {}", big.max_size, b.max_size);
+        assert!((reach(&big) - 0.25).abs() < 1e-3, "{}", reach(&big));
+        assert!((big.spacing - 0.1).abs() < 1e-5, "{}", big.spacing);
+        // gathered to the middle: thrown half as far
+        let gathered = csp_brush(&CspBrush { spray: Some(CspSpray { bias: 1.0, ..spray.clone() }), ..c.clone() });
+        assert!((reach(&gathered) - 0.25).abs() < 1e-3, "{}", reach(&gathered));
+        // fewer with less pressure, down to a fifth, and some at random
+        let by = procraft_engine::csp::CspDynamics {
+            pressure: Some(procraft_engine::csp::CspCurve { points: vec![(0.0, 0.0), (1.0, 1.0)], least: 0.2 }),
+            random: Some(0.6),
+            ..Default::default()
+        };
+        let pressed = csp_brush(&CspBrush { spray: Some(CspSpray { density_by: Some(by), ..spray }), ..c });
+        let curve = pressed.pressure_curves.get(procraft_engine::brush::PressureCurve::Count).unwrap();
+        assert!((curve.eval(0.0) - 0.2).abs() < 0.02 && (curve.eval(1.0) - 1.0).abs() < 0.02);
+        assert!((pressed.setting("count_jitter") - 0.4).abs() < 1e-5);
+    }
+
+    #[test]
+    fn a_sub_tools_tip_turns_as_it_says_and_a_ribbon_lays_its_pictures_end_to_end() {
+        use procraft_engine::csp::CspBrush;
+        use std::f32::consts::FRAC_PI_2;
+        // a picture twice as wide as it is tall
+        let wide: Vec<u8> = (0..40 * 20).flat_map(|_| [0, 0, 0, 255]).collect();
+        let c = CspBrush {
+            name: "Wood".into(),
+            angle: FRAC_PI_2,
+            tip_pngs: vec![crate::project::rgba_png(40, 20, &wide)],
+            ..Default::default()
+        };
+        // held still: its angle as it is
+        let b = csp_brush(&c);
+        assert_eq!((b.shape.follow, b.shape.rotation, b.shape.scatter), (0.0, FRAC_PI_2, 0.0));
+        // turning with the stroke, and a fifth of the way at random: its 0 is a quarter turn on
+        let b = csp_brush(&CspBrush { follows: true, random_turn: 0.2, ..c.clone() });
+        assert_eq!((b.shape.follow, b.shape.rotation, b.shape.scatter), (1.0, 0.0, 0.2));
+        // a ribbon follows the stroke, its pictures (as long as the stamp along it) touching
+        let b = csp_brush(&CspBrush { ribbon: true, ..c.clone() });
+        assert_eq!((b.shape.follow, b.spacing), (1.0, 1.0));
+        // turned across the stroke, each is half as long along it
+        let b = csp_brush(&CspBrush { ribbon: true, angle: 0.0, ..c.clone() });
+        assert!((b.spacing - 0.5).abs() < 1e-5, "{}", b.spacing);
+        // a round tip flattened side to side, ours a quarter turned (turning with the stroke: as
+        // it goes, so thin across it); flattened top to bottom, as ours is
+        let oval = CspBrush { follows: true, roundness: Some(0.5), tip_pngs: Vec::new(), ..c.clone() };
+        assert_eq!(csp_brush(&CspBrush { angle: 0.0, ..oval.clone() }).shape.rotation, 0.0);
+        let upright = CspBrush { angle: 0.0, flattened_vertically: true, ..oval };
+        assert!((csp_brush(&upright).shape.rotation - 3.0 * FRAC_PI_2).abs() < 1e-5);
+        // its opacity, flow and size
+        let b = csp_brush(&CspBrush { opacity: Some(0.4), flow: Some(0.7), size: Some(100.0), ..c.clone() });
+        assert_eq!(b.max_opacity, 0.4);
+        assert!(b.min_opacity <= 0.4);
+        assert!((b.setting("flow") - 0.7).abs() < 1e-5);
+        let half = csp_brush(&CspBrush { size: Some(50.0), ..c });
+        assert!((b.max_size / half.max_size - 2.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_sub_tools_pen_dynamics_and_its_start_and_end_become_ours() {
+        use procraft_engine::brush::PressureCurve;
+        use procraft_engine::csp::{CspBrush, CspCurve, CspDynamics, CspPen, CspTaper, CspTexture};
+        let near = |a: f32, b: f32| (a - b).abs() < 5e-3;
+        let straight = || CspCurve { least: 0.0, points: vec![(0.0, 0.0), (1.0, 1.0)] };
+        let bent = CspCurve { least: 0.3, points: vec![(0.0, 0.0), (0.75, 0.25), (1.0, 1.0)] };
+        let dots: Vec<u8> = (0..16 * 16).flat_map(|i| [0, 0, 0, if i % 3 == 0 { 255 } else { 0 }]).collect();
+        let c = CspBrush {
+            name: "Ribbon".into(),
+            pen: CspPen {
+                size: Some(CspDynamics { pressure: Some(bent.clone()), random: Some(0.6), ..Default::default() }),
+                opacity: Some(CspDynamics {
+                    tilt: Some(CspCurve { least: 0.2, ..straight() }),
+                    speed: Some(0.5),
+                    ..Default::default()
+                }),
+                flow: Some(CspDynamics { pressure: Some(straight()), random: Some(0.9), ..Default::default() }),
+                thickness: Some(CspDynamics { pressure: Some(straight()), ..Default::default() }),
+                texture_density: Some(CspDynamics {
+                    pressure: Some(CspCurve { least: 0.4, ..straight() }),
+                    ..Default::default()
+                }),
+            },
+            taper: Some(CspTaper { start: Some(128.0), end: None, of_stroke: false, size: 1.0, opacity: 0.5 }),
+            texture: Some(CspTexture { pngs: vec![crate::project::rgba_png(16, 16, &dots)], ..Default::default() }),
+            ..Default::default()
+        };
+        let b = csp_brush(&c);
+        // pressure takes the size down to 30 % along its own curve (through its points); chance
+        // up to 40 %
+        assert!(near(b.pressure_size, 0.7));
+        for (x, y) in [(0.0, 0.0), (0.75, 0.25), (1.0, 1.0)] {
+            assert!(near(b.size_curve.eval(x), y), "{x}: {}", b.size_curve.eval(x));
+        }
+        let (none, full) = (b.pressure_factors(0.0).0, b.pressure_factors(1.0).0);
+        assert!(near(none, 0.3) && near(full, 1.0), "{none} {full}");
+        assert!(near(b.setting("jitter_size"), 0.4));
+        // no pressure on the opacity; leaning fades it to 20 % and chance (the flow's) takes a
+        // tenth: tilt scales it before it is eased, so by its root; speed is left out
+        assert_eq!(b.pressure_opacity, 0.0);
+        let kept = ["tilt_opacity", "speed_opacity", "jitter_opacity"].map(|k| b.setting(k));
+        let root = |v: f32| 1.0 - v.powf(1.0 / procraft_engine::brush::FLOW_POWER);
+        assert!(near(kept[0], root(0.2)) && kept[1] == 0.0 && near(kept[2], 0.1), "{kept:?}");
+        // pressure on the opacity: a stamp lays what the curve says once eased
+        let pressed = csp_brush(&CspBrush {
+            pen: CspPen {
+                opacity: Some(CspDynamics { pressure: Some(bent.clone()), ..Default::default() }),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let laid = |p: f32| pressed.pressure_factors(p).1.powf(procraft_engine::brush::FLOW_POWER);
+        assert!(near(laid(0.0), 0.3) && near(laid(1.0), 1.0), "{} {}", laid(0.0), laid(1.0));
+        // and between, not only at its ends
+        let want = csp_curve(&bent.points, 0.3).eval(0.5);
+        assert!((laid(0.5) - want).abs() < 0.01, "{} {want}", laid(0.5));
+        // the flow and the roundness follow the pressure all the way, straight
+        assert!(near(b.setting("pressure_flow"), 1.0) && near(b.setting("pressure_roundness"), 1.0));
+        assert!(b.pressure_curves.get(PressureCurve::Flow).is_some());
+        assert!(b.pressure_curves.get(PressureCurve::Roundness).is_some());
+        // the texture shows from 40 % at no pressure to all of it at full
+        assert!(near(b.pressure_curves.at(PressureCurve::GrainDepth, 0.0), 0.4));
+        assert!(near(b.pressure_curves.at(PressureCurve::GrainDepth, 1.0), 1.0));
+        // 128 px in (a quarter of a classic taper's span), no end, thinning to nothing and half
+        // fading, for a pen and a finger alike
+        for t in [&b.pen_taper, &b.touch_taper] {
+            assert_eq!((t.start, t.end, t.size, t.opacity), (0.25, 0.0, 1.0, 0.5));
+        }
+        assert_eq!(b.setting("classic_taper"), 1.0);
+        // a size the file has, that no pressure drives, doesn't follow it; nothing said, ours stays
+        let flat =
+            csp_brush(&CspBrush { pen: CspPen { size: Some(CspDynamics::default()), ..Default::default() }, ..c });
+        assert_eq!(flat.pressure_size, 0.0);
+        assert_eq!(csp_brush(&CspBrush::default()).pressure_size, Brush::round_pen().pressure_size);
+    }
+
+    #[test]
+    fn a_sub_tools_curve_is_joined_without_swinging_past_its_points() {
+        use procraft_engine::geom::Vec2;
+        // a real pen's flow: from 30 % up to 75 %, steeply in its last few hundredths (a natural
+        // spline through the three swings below nothing in the middle)
+        let flow = [(0.0, 0.301), (0.967, 0.62), (1.0, 0.748)];
+        let ours = csp_curve(&flow, 0.0);
+        let mut was = 0.0f32;
+        for i in 0..=100 {
+            let y = ours.eval(i as f32 / 100.0);
+            assert!((0.29..=0.75).contains(&y) && y >= was - 1e-3, "{i}: {y}");
+            was = y;
+        }
+        for (x, y) in flow {
+            assert!((ours.eval(x) - y).abs() < 0.02, "{x}: {}", ours.eval(x));
+        }
+        // one that rises and falls back stays between its points, level where it turns
+        let hump = csp_curve(&[(0.0, 0.534), (0.039, 0.62), (0.336, 0.675), (1.0, 0.552)], 0.0);
+        assert!((0..=100).all(|i| (0.53..=0.68).contains(&hump.eval(i as f32 / 100.0))));
+        // a gentle one keeps its own few points, for editing; scaled from what it leaves at none
+        let gentle = csp_curve(&[(0.0, 0.0), (0.5, 0.4), (1.0, 1.0)], 0.5);
+        assert_eq!(gentle.points(), [Vec2::new(0.0, 0.5), Vec2::new(0.5, 0.7), Vec2::new(1.0, 1.0)]);
+    }
+
+    #[test]
+    fn a_sub_tools_pictures_lay_their_dark_ink_or_else_their_coverage() {
+        use procraft_engine::csp::{CspBrush, CspTexture};
+        let picture = |f: &dyn Fn(usize, usize) -> [u8; 4]| {
+            let px: Vec<u8> = (0..16 * 16).flat_map(|i| f(i % 16, i / 16)).collect();
+            crate::project::rgba_png(16, 16, &px)
+        };
+        // a material's ink: black, opaque in its left half, clear in its right
+        let ink = picture(&|x, _| [0, 0, 0, if x < 8 { 255 } else { 0 }]);
+        let texture =
+            |pngs: Vec<Vec<u8>>, reverse: bool| CspTexture { pngs, density: Some(1.0), reverse, ..Default::default() };
+        let c =
+            CspBrush { name: "Pencil".into(), texture: Some(texture(vec![ink.clone()], false)), ..Default::default() };
+        let n = TEXTURE_SIZE;
+        // (a row across the middle, left and right)
+        let sides = |s: &Source| (s.pixels[n * n / 2 + n / 8], s.pixels[n * n / 2 + n - n / 8]);
+        // the paper lets paint through where it is dark, not where it is clear; reversed, the other way
+        let (left, right) = sides(csp_brush(&c).grain.source.as_ref().unwrap());
+        assert!(left > 200 && right < 50, "{left} {right}");
+        let reversed = csp_brush(&CspBrush { texture: Some(texture(vec![ink.clone()], true)), ..c.clone() });
+        let (left, right) = sides(reversed.grain.source.as_ref().unwrap());
+        assert!(left < 50 && right > 200, "{left} {right}");
+        // a tip: the dark ink, not the few faint light specks on its clear side
+        let specks = picture(&|x, y| match (x < 8, (x + y) % 5 == 0) {
+            (true, _) => [0, 0, 0, 255],
+            (false, true) => [255, 255, 255, 14],
+            (false, false) => [255, 255, 255, 0],
+        });
+        let tip = csp_brush(&CspBrush { tip_pngs: vec![specks], texture: None, ..c.clone() });
+        let (left, right) = sides(tip.shape.source.as_ref().unwrap());
+        assert!(left > 200 && right < 50, "{left} {right}");
+        // light on clear has next to no dark: its coverage
+        let light = picture(&|x, _| [255, 255, 255, if x < 8 { 255 } else { 0 }]);
+        let tip = csp_brush(&CspBrush { tip_pngs: vec![light], texture: None, ..c.clone() });
+        let (left, right) = sides(tip.shape.source.as_ref().unwrap());
+        assert!(left > 200 && right < 50, "{left} {right}");
+        // a picture on white (all opaque): its dark parts
+        let on_white = picture(&|x, _| if x < 8 { [20, 20, 20, 255] } else { [255, 255, 255, 255] });
+        let tip = csp_brush(&CspBrush { tip_pngs: vec![on_white], texture: None, ..c });
+        let (left, right) = sides(tip.shape.source.as_ref().unwrap());
+        assert!(left > 200 && right < 50, "{left} {right}");
     }
 
     #[test]

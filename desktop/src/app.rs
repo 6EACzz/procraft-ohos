@@ -523,6 +523,24 @@ impl<H: Host, L: Loop> App<H, L> {
                     self.ui.started_new();
                 }
             }
+            // a plugin's kind of artwork, the screen's size, its plugin keeping it
+            Some(crate::gallery::Asked::PluginKind(kind, folder)) => {
+                let (w, h) = self.gallery.screen_px;
+                let canvas = self.ui.plugins_shared().open_canvas(kind.clone(), w, h, None);
+                match canvas {
+                    Some(canvas) if !busy => {
+                        let session = CanvasSession::new(w, h);
+                        session.set_new_profile(procraft_core::P3.into());
+                        if session.attach_plugin_canvas(kind, canvas) {
+                            let dir = self.gallery.store.new_folder(folder);
+                            self.open_artwork(session, dir);
+                            self.ui.started_new();
+                        }
+                    }
+                    Some(_) => {}
+                    None => crate::files::say("The plugin couldn't make this artwork."),
+                }
+            }
             Some(crate::gallery::Asked::Share(list, format)) => {
                 crate::files::share_artworks(&list, format, 100, &mut self.ui.export_card);
             }

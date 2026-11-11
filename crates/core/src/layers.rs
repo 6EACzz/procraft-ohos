@@ -743,20 +743,14 @@ impl CanvasSession {
     }
 
     /// Shows layer `id` alone, the others left out of the picture (solo visibility), or with
-    /// none every layer as it is set again. Not an undo step; false if `id` isn't a layer.
+    /// none every layer as it is set again: an undo step, as the reference's is. False if `id`
+    /// isn't a layer.
     pub fn set_solo(&self, id: Option<u64>) -> bool {
-        let mut guard = self.shared.lock();
-        let st = &mut *guard;
         let solo = id.map(LayerId);
-        if solo.is_some_and(|s| st.doc.layer(s).is_none()) {
+        if solo.is_some_and(|s| self.shared.lock().doc.layer(s).is_none()) {
             return false;
         }
-        st.doc.solo = solo;
-        if let Some(canvas) = st.canvas.as_mut() {
-            canvas.invalidate();
-        }
-        st.revision += 1;
-        self.shared.frame(st);
+        self.change("Solo visibility", |d| (d.solo != solo).then(|| d.solo = solo));
         true
     }
 
@@ -787,7 +781,18 @@ impl CanvasSession {
 
     /// Opacity 0..1; `done` ends the drag (one undo step for the whole drag).
     pub fn set_layer_opacity(&self, id: u64, opacity: f32, done: bool) -> bool {
-        self.change_live("layer opacity", done, |d| d.set_opacity(LayerId(id), opacity))
+        // a plugin moving picked layers together: each of them, if this is one
+        let hooks = self.shared.lock().hooks.clone();
+        let together = hooks.is_some_and(|hooks| hooks.opacity_together());
+        self.change_live("layer opacity", done, |d| {
+            let chosen = d.chosen();
+            if !(together && chosen.len() > 1 && chosen.contains(&LayerId(id))) {
+                return d.set_opacity(LayerId(id), opacity);
+            }
+            let layers: Vec<LayerId> =
+                chosen.into_iter().filter(|&c| d.layer(c).is_some_and(|l| l.kind != LayerKind::Mask)).collect();
+            layers.into_iter().fold(false, |any, c| d.set_opacity(c, opacity) | any)
+        })
     }
 
     /// `blend` is a blend mode id (see [`blend_modes`]).
@@ -881,11 +886,16 @@ impl CanvasSession {
     /// [`Self::canvas_thumbnail`], but without the private layers, so a private insert or paste
     /// never shows in the replay or its video. None before the canvas exists.
     pub fn time_lapse_frame(&self, max_side: u32) -> Option<ThumbnailImage> {
-        let mut guard = self.shared.lock();
-        let st = &mut *guard;
-        let (Some(canvas), Some(gpu)) = (st.canvas.as_mut(), st.gpu.as_ref()) else { return None };
-        let private = st.doc.private_layers();
-        let t = canvas.composite_thumbnail_without(gpu, &mut st.doc, max_side, &private).ok()?;
+        // the copy started under the lock, waited for once it is let go: touches and frames go
+        // on while the GPU copies it
+        let pending = {
+            let mut guard = self.shared.lock();
+            let st = &mut *guard;
+            let (Some(canvas), Some(gpu)) = (st.canvas.as_mut(), st.gpu.as_ref()) else { return None };
+            let private = st.doc.private_layers();
+            canvas.start_composite_thumbnail_without(gpu, &mut st.doc, max_side, &private)
+        };
+        let t = pending.pixels().ok()?;
         Some(ThumbnailImage { width: t.width, height: t.height, rgba: t.rgba })
     }
 
@@ -906,10 +916,30 @@ impl CanvasSession {
 
     /// The layer scaled to fit `max_side` pixels, or none before the canvas exists.
     pub fn layer_thumbnail(&self, id: u64, max_side: u32) -> Option<ThumbnailImage> {
-        let mut guard = self.shared.lock();
-        let st = &mut *guard;
-        let (Some(canvas), Some(gpu)) = (st.canvas.as_mut(), st.gpu.as_ref()) else { return None };
-        match canvas.layer_thumbnail(gpu, &mut st.doc, LayerId(id), max_side) {
+        // each read started under the lock and waited for once it is let go, so touches and
+        // frames go on meanwhile (thumbnails are read after every change while Layers is open)
+        let id = LayerId(id);
+        let no_canvas = || procraft_gpu::GpuError::Readback("no canvas".into());
+        let read = || -> Result<procraft_gpu::Thumbnail, procraft_gpu::GpuError> {
+            let first = {
+                let mut guard = self.shared.lock();
+                let st = &mut *guard;
+                let (Some(canvas), Some(gpu)) = (st.canvas.as_mut(), st.gpu.as_ref()) else { return Err(no_canvas()) };
+                canvas.start_layer_thumbnail(gpu, &mut st.doc, id, max_side)?
+            };
+            let (coarse, mask) = match first {
+                procraft_gpu::LayerThumbnailStep::Ready(t) => return Ok(t),
+                procraft_gpu::LayerThumbnailStep::Coarse { pending, mask } => (pending.pixels()?, mask),
+            };
+            let fine = {
+                let mut guard = self.shared.lock();
+                let st = &mut *guard;
+                let (Some(canvas), Some(gpu)) = (st.canvas.as_mut(), st.gpu.as_ref()) else { return Err(no_canvas()) };
+                canvas.start_layer_thumbnail_fine(gpu, id, &coarse, mask, max_side)?
+            };
+            fine.pixels()
+        };
+        match read() {
             Ok(t) => Some(ThumbnailImage { width: t.width, height: t.height, rgba: t.rgba }),
             Err(e) => {
                 log::warn!("thumbnail: {e}");

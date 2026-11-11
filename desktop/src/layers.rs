@@ -170,6 +170,9 @@ pub struct Layers {
     pub copied: Option<ThumbnailImage>,
     pub share: bool,
     pub edit_text: Option<u64>,
+    /// The plugins' actions for the current layer's options, and the one tapped there, to run.
+    pub plugin_actions: Vec<procraft_core::PluginAction>,
+    pub run_action: Option<String>,
     /// Layer Opacity asked for the current layer (two fingers tapped on its row).
     pub layer_opacity: bool,
     /// The background's colour asked for: its row tapped anywhere but on its box.
@@ -405,7 +408,11 @@ impl Layers {
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
                         .show(ui, |ui| {
                             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                            ui.scroll_with_delta(vec2(0.0, -std::mem::take(&mut self.scroll_by)));
+                            // at once: a finger's drag or a dragged row's at the edge, each frame
+                            ui.scroll_with_delta_animation(
+                                vec2(0.0, -std::mem::take(&mut self.scroll_by)),
+                                egui::style::ScrollAnimation::none(),
+                            );
                             let mut dragged = Vec::new();
                             let mut squeezed = Vec::new();
                             for item in &items {
@@ -474,7 +481,8 @@ impl Layers {
                                     {
                                         let since = Instant::now();
                                         let way = Way::Undecided;
-                                        let mouse = !ui.input(|i| i.any_touches());
+                                        // a tablet's pen moving the mouse pointer goes as a finger
+                                        let mouse = !ui.input(|i| i.any_touches()) && crate::pen::mouse_pen().is_none();
                                         self.press = Some(RowPress {
                                             id: l.id,
                                             origin,
@@ -1112,8 +1120,8 @@ impl Layers {
 
     /// Follows the press on a row: moved sideways it slides the row (let go past half its buttons,
     /// it stays open; slid right past half the way, it picks the layer); held still (or, with a
-    /// mouse, moved up or down: a finger doing that scrolls the list), the row is dragged up and down
-    /// and, let go, the layer moves next to the row it is over.
+    /// mouse, moved up or down: a finger or pen doing that scrolls the list, which follows it), the
+    /// row is dragged up and down and, let go, the layer moves next to the row it is over.
     fn follow_press(
         &mut self,
         ctx: &egui::Context,
@@ -1133,6 +1141,11 @@ impl Layers {
                     let sideways = d.x.abs() > d.y.abs();
                     if d.length() > SLOP && (sideways || !p.mouse) {
                         p.way = if sideways { Way::Swipe } else { Way::Ignored };
+                        // up or down: the list follows the finger from where it was put down
+                        if !sideways {
+                            self.scroll_by -= d.y;
+                            ctx.request_repaint();
+                        }
                     } else if p.since.elapsed() >= HOLD || d.length() > SLOP {
                         // a mask stays with its layer
                         if l.is_some_and(|l| l.kind != LayerType::Mask) {
@@ -1173,6 +1186,12 @@ impl Layers {
                         };
                         self.scroll_by = towards.clamp(-1.0, 1.0) * DRAG_SCROLL * ctx.input(|i| i.stable_dt);
                     }
+                    ctx.request_repaint();
+                }
+                // a finger's: the row has the drag (not the list's own drag to scroll), the list
+                // follows it
+                Way::Ignored if !p.mouse => {
+                    self.scroll_by -= ctx.input(|i| i.pointer.delta().y);
                     ctx.request_repaint();
                 }
                 Way::Ignored => {}
@@ -1262,13 +1281,17 @@ impl Layers {
         backdrops: &mut Vec<f32>,
     ) {
         let rows: Vec<LayerOptionRow> = session.layer_options(l.id);
+        // a plugin's actions for the layer, after the app's own
+        let actions = std::mem::take(&mut self.plugin_actions);
+        let count = rows.len() + actions.len();
         // as measured, an empty one (a locked group's or mask's) is a pill 64 tall
-        let height = (7.0 * 2.0 + menu::OPTION_HEIGHT * rows.len() as f32).max(64.0);
+        let height = (7.0 * 2.0 + menu::OPTION_HEIGHT * count as f32).max(64.0);
         let screen = ctx.content_rect();
         let lowest = (screen.bottom() - height).max(screen.top() + OPTIONS_TOP);
         let top = (row_y - height / 2.0).clamp(screen.top() + OPTIONS_TOP, lowest);
         let rect = Rect::from_min_size(pos2(panel.left() + OPTIONS_LEFT, top), vec2(OPTIONS_WIDTH, height));
         let mut chosen = None;
+        let mut action = None;
         self.options_menu.show(
             ctx,
             "layer options",
@@ -1277,19 +1300,29 @@ impl Layers {
             // empty, as measured, the frost alone, untinted
             menu::Glass {
                 corner: OPTIONS_CORNER,
-                fill: if rows.is_empty() { Themed(0, 0) } else { menu::FROSTED.fill },
+                fill: if count == 0 { Themed(0, 0) } else { menu::FROSTED.fill },
                 ..menu::FROSTED
             },
             backdrops,
             |ui| {
-                let places = menu::option_rows(rect.left(), rect.top() + 7.0, rect.width(), rows.len());
-                for (row, r) in places.zip(&rows) {
+                let mut places = menu::option_rows(rect.left(), rect.top() + 7.0, rect.width(), count);
+                for (row, r) in places.by_ref().zip(&rows) {
                     if menu::option(ui, look, row, &r.label, r.switch_on.unwrap_or(false), r.enabled, false) {
                         chosen = Some(r.option);
                     }
                 }
+                for (row, a) in places.zip(&actions) {
+                    if menu::option(ui, look, row, &a.label, false, true, false) {
+                        action = Some(a.key.clone());
+                    }
+                }
             },
         );
+        if let Some(key) = action {
+            self.options_menu.close();
+            self.run_action = Some(key);
+            return;
+        }
         // every row closes the menu, a switch's too (it shows ticked next time)
         let Some(does) = chosen else { return };
         self.options_menu.close();
@@ -1956,6 +1989,74 @@ mod tests {
             output.textures_delta.clear();
         }
         (asked, session.background().visible)
+    }
+
+    /// A finger dragged 180 points up a row of a long list, quickly (before a hold picks the row
+    /// up): how far the row moved up, points.
+    fn finger_drag_up_a_row() -> f32 {
+        let (ctx, mut look) = (egui::Context::default(), Look::default());
+        crate::look::install_fonts(&ctx);
+        let session = CanvasSession::new(64, 64);
+        for _ in 0..24 {
+            session.add_layer();
+        }
+        let (mut layers, mut colours) = (Layers::default(), Colours::default());
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+        let button = Rect::from_min_size(pos2(1000.0, 10.0), vec2(40.0, 40.0));
+        let mut step = 0;
+        let mut frame = |layers: &mut Layers, events: Vec<Event>| {
+            let raw = RawInput {
+                screen_rect: Some(screen),
+                time: Some(f64::from(step) / 60.0),
+                events,
+                ..RawInput::default()
+            };
+            step += 1;
+            let mut output = ctx.clone().run_ui(raw, |ui| {
+                layers.show(ui.ctx(), &mut look, &session, &mut colours, button, &mut Vec::new());
+            });
+            output.textures_delta.clear();
+        };
+        for _ in 0..4 {
+            frame(&mut layers, Vec::new());
+        }
+        // a row half way down the list as shown
+        let list = layers.list.unwrap();
+        let mut rows: Vec<(u64, Rect)> =
+            layers.last_rows.iter().filter(|(_, r)| list.contains(r.center())).map(|(id, r)| (*id, *r)).collect();
+        rows.sort_by(|a, b| a.1.top().total_cmp(&b.1.top()));
+        let (id, row) = rows[rows.len() / 2];
+        let touch = |phase, pos| Event::Touch {
+            device_id: egui::TouchDeviceId(1),
+            id: egui::TouchId(1),
+            phase,
+            pos,
+            force: None,
+        };
+        let button_at = |pos, pressed| Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        // as egui-winit gives a touch: the touch, and the pointer it moves
+        let mut at = row.center();
+        frame(&mut layers, vec![touch(egui::TouchPhase::Start, at), Event::PointerMoved(at), button_at(at, true)]);
+        for _ in 0..15 {
+            at.y -= 12.0;
+            frame(&mut layers, vec![touch(egui::TouchPhase::Move, at), Event::PointerMoved(at)]);
+        }
+        frame(&mut layers, vec![touch(egui::TouchPhase::End, at), button_at(at, false), Event::PointerGone]);
+        for _ in 0..4 {
+            frame(&mut layers, Vec::new());
+        }
+        layers.last_rows.get(&id).map_or(0.0, |after| row.top() - after.top())
+    }
+
+    #[test]
+    fn a_finger_dragged_up_a_row_scrolls_the_list() {
+        let moved = finger_drag_up_a_row();
+        assert!(moved > 120.0, "the row moved {moved} points up");
     }
 
     #[test]

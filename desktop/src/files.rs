@@ -36,6 +36,8 @@ pub enum Format {
     ModelTiff,
     ModelTextures,
     ModelArtwork,
+    /// A plugin's artwork, its shapes kept.
+    Svg,
 }
 
 impl Format {
@@ -52,6 +54,7 @@ impl Format {
             Format::Jpeg | Format::ModelJpeg => "JPEG",
             Format::ModelObj => "OBJ",
             Format::ModelUsdz => "USDZ",
+            Format::Svg => "SVG",
         }
     }
 
@@ -72,6 +75,7 @@ impl Format {
             Format::Tiff | Format::ModelTiff => "tiff",
             Format::Jpeg | Format::ModelJpeg => "jpg",
             Format::ModelObj => "zip",
+            Format::Svg => "svg",
             Format::ModelUsdz => "usdz",
         }
     }
@@ -273,6 +277,21 @@ pub fn tell_later(title: &str, text: &str) {
     TOLD.lock().unwrap_or_else(|e| e.into_inner()).push((title.to_owned(), text.to_owned()));
 }
 
+/// Keeps `session`'s brushes in their folder. One that can't (the disk full, say) is told once,
+/// from the window's thread, and not again until they are kept once more.
+pub fn keep_brushes(session: &procraft_core::CanvasSession) {
+    static FAILING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if session.keep_brushes(brushes_dir()) {
+        FAILING.store(false, std::sync::atomic::Ordering::Relaxed);
+    } else if !FAILING.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        tell_later(
+            "Can't keep the brushes",
+            "The brush library couldn't be kept. The disk may be full: brushes brought in or changed \
+             since are lost when ProCraft closes, unless some room is made.",
+        );
+    }
+}
+
 /// Shows the messages the writing threads left.
 pub fn tell_what_was_told() {
     let told = std::mem::take(&mut *TOLD.lock().unwrap_or_else(|e| e.into_inner()));
@@ -299,6 +318,21 @@ pub fn save_file(bytes: &[u8], name: &str, extension: &str, kind: &str) {
     // a file there already is replaced only once this one is written whole
     if let Err(e) = write_whole(&path, bytes) {
         tell("Can't share", &e.to_string());
+    }
+}
+
+/// A sound the user picks (titled `title`): a WAV file, read whole, with its name.
+pub fn pick_sound(title: &str) -> Option<(Vec<u8>, String)> {
+    let path = crate::platform::pick(crate::platform::Picked::default().title(title).filter("Sounds", &["wav", "wave"]))
+        .into_iter()
+        .next()?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    match std::fs::read(&path) {
+        Ok(bytes) => Some((bytes, name)),
+        Err(_) => {
+            say("This file could not be read.");
+            None
+        }
     }
 }
 
@@ -782,6 +816,7 @@ pub fn export(
             Format::ModelUsdz => session.export_model_usdz(at),
             Format::ModelRender => session.export_model_render(at, false),
             Format::ModelTiff => session.export_model_tiff(at),
+            Format::Svg => session.export_svg(at),
             Format::LayerPngs | Format::ChosenLayerPngs | Format::ModelTextures => Ok(()),
         }?;
         Ok(vec![part])
