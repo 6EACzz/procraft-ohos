@@ -39,6 +39,13 @@ pub struct OhosScreen {
     /// made without a GPU error.
     canvases: Option<std::thread::JoinHandle<bool>>,
     canvases_since: Instant,
+    /// On GL only (see [`make_canvases`]): how the pipelines are made once the first frame has
+    /// shown, kept until then. A thread making them holds the same GL context the frame is drawn
+    /// with, so the two must not run at once.
+    canvases_later: Option<Box<dyn Fn() -> Option<std::thread::JoinHandle<bool>> + Send>>,
+    /// Whether the soft keyboard was asked for last frame (it is asked for only when that
+    /// changes: an ask each frame would queue a keyboard each frame).
+    typing: bool,
 }
 
 /// A canvas drawn into a picture of its own (the surface's format), its size, and the
@@ -146,7 +153,19 @@ impl OhosScreen {
         // the page's density is egui's *native* one: its own zoom stays 1.0, and a point is
         // `pixels_per_point` pixels (only the viewport's info can say so, not the zoom)
         ctx.set_zoom_factor(1.0);
-        let canvases = make_canvases(&gpu, wake);
+        // on GL the pipelines' thread and the frame share the device's context, which wgpu-hal
+        // lets one of them hold at a time (it gives up after six seconds and ends the app): the
+        // desktop makes them from the frame that first showed, never beside one, and so does this
+        let later: Option<Box<dyn Fn() -> Option<std::thread::JoinHandle<bool>> + Send>> = if gpu.is_gl() {
+            let (gpu, wake) = (gpu.clone(), wake.clone());
+            Some(Box::new(move || make_canvases(&gpu, wake.clone())))
+        } else {
+            None
+        };
+        let canvases = match &later {
+            Some(_) => None,
+            None => make_canvases(&gpu, wake),
+        };
         Ok((
             OhosScreen {
                 surface,
@@ -162,21 +181,39 @@ impl OhosScreen {
                 modifiers: egui::Modifiers::default(),
                 canvases,
                 canvases_since: Instant::now(),
+                canvases_later: later,
+                typing: false,
             },
             0,
         ))
     }
 
     /// Whether the canvases' pipelines were made without a GPU error, once they are made (told
-    /// once only).
+    /// once only). Not while they are still being made: the frame carries on (the thread would
+    /// hold the GL context the frame needs).
     pub fn canvases_made(&mut self) -> Option<bool> {
-        let made = self.canvases.take()?;
-        Some(made.join().unwrap_or(false))
+        let made = self.canvases.as_ref()?;
+        if !made.is_finished() {
+            return None;
+        }
+        Some(self.canvases.take()?.join().unwrap_or(false))
     }
 
     /// Since when the canvases' pipelines have been being made, while they are.
     pub fn canvases_waited(&self) -> Option<Duration> {
         self.canvases.as_ref().map(|_| self.canvases_since.elapsed())
+    }
+
+    /// Whether the canvases' pipelines are made from the first frame that shows, rather than from
+    /// [`OhosScreen::new`] (on GL: see the note there).
+    pub fn canvases_later(&self) -> bool {
+        self.canvases_later.is_some()
+    }
+
+    /// Whether a thread is making the canvases' pipelines this frame can't be drawn beside (it
+    /// holds the GL context the frame would draw with).
+    pub fn gl_busy(&self) -> bool {
+        self.gpu.is_gl() && self.canvases.as_ref().is_some_and(|made| !made.is_finished())
     }
 
     pub fn pixels_per_point(&self) -> f32 {
@@ -294,10 +331,10 @@ impl OhosScreen {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(points.0, points.1))),
             max_texture_side: Some(usize::try_from(self.gpu.max_texture_size()).unwrap_or(8192)),
             time: Some(now.duration_since(self.began).as_secs_f64()),
-            // (left as the desktop leaves it: egui takes what is said here as the time to the next
-            // frame, and an animations' own timing goes by it, so a fixed guess keeps animations
-            // going for ever, drawing a frame each one)
-            predicted_dt: 0.0,
+            // how long this frame is expected to last, for the animations that go by it (egui's
+            // own guess, a sixtieth of a second: left as it is, as the desktop leaves it — nought
+            // would tell every animation it has no time to move in, and none would ever settle)
+            predicted_dt: 1.0 / 60.0,
             events,
             focused,
             ..Default::default()
@@ -314,6 +351,36 @@ impl OhosScreen {
         raw
     }
 
+    /// What the interface asked the platform to do this frame, done: the clipboard written to
+    /// (a copy, a cut, a paste of what the shell holds), a link opened, the soft keyboard raised or
+    /// put away. The desktop's `handle_platform_output` (`egui_winit`) does the same for its window.
+    fn answer_platform_output(&mut self, output: &egui::PlatformOutput) {
+        crate::ohos_input::set_cursor(output.cursor_icon);
+        for command in &output.commands {
+            match command {
+                // a copy or a cut: what the interface selected, as text
+                egui::OutputCommand::CopyText(text) => crate::platform::clipboard_write_text(text),
+                // (the desktop keeps a primary selection beside the clipboard; a tablet has none)
+                egui::OutputCommand::TextSelectionSettled(_) => {}
+                // a picture copied out of a canvas (the layers' own pictures, a screenshot of one)
+                egui::OutputCommand::CopyImage(image) => {
+                    let (width, height) = (image.size[0] as u32, image.size[1] as u32);
+                    crate::platform::clipboard_write_picture(width, height, image.as_raw());
+                }
+                // a link the interface shows: nothing to open it with here, and the app's own
+                // links are opened by the shell when it is told to
+                egui::OutputCommand::OpenUrl(url) => log::info!("a link was asked for: {}", url.url),
+            }
+        }
+        // a field is being typed in: the soft keyboard rises for it, and goes when it is done
+        // (egui says so with the input method it wants: see `TextEdit`'s own `o.ime`)
+        let typing = output.ime.is_some();
+        if typing != self.typing {
+            self.typing = typing;
+            crate::ohos_platform::keyboard(typing);
+        }
+    }
+
     /// Draws a frame: the canvas (if one is open) and the interface over it.
     pub fn draw(
         &mut self,
@@ -323,7 +390,7 @@ impl OhosScreen {
     ) -> Option<Duration> {
         let egui::FullOutput { platform_output, mut textures_delta, shapes, pixels_per_point: _, viewport_output } =
             output;
-        crate::ohos_input::set_cursor(platform_output.cursor_icon);
+        self.answer_platform_output(&platform_output);
         let interface_after = viewport_output
             .get(&egui::ViewportId::ROOT)
             .map(|v| v.repaint_delay)
@@ -387,6 +454,17 @@ impl OhosScreen {
         }
         queue.submit(uploads.into_iter().chain([encoder.finish()]));
         queue.present(frame);
+        // the start's own record (the desktop's `Screen::draw` keeps it the same way): the window
+        // shows a frame, so it draws; and the canvases' pipelines are made from here on, now that
+        // this frame is done with the context they would hold
+        crate::startup::gpu_shown();
+        if let Some(later) = self.canvases_later.take() {
+            self.canvases = later();
+            self.canvases_since = Instant::now();
+        }
+        if crate::startup::canvas_awaited() {
+            crate::startup::canvas_shown(session.map(|s| s.frames_drawn() > 0));
+        }
         match (canvas_after, interface_after) {
             (Some(canvas), Some(interface)) => Some(canvas.min(interface)),
             (canvas, interface) => canvas.or(interface),

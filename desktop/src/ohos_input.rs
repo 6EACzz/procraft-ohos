@@ -50,6 +50,23 @@ fn egui_key(named: Option<NamedKey>, character: Option<char>) -> Option<egui::Ke
     egui::Key::from_name(name)
 }
 
+/// A modifier key went down or up: its flag, as egui wants it, and the window's state of what is
+/// held, both set, and whether that was news (nothing is said of a key that was held already, or
+/// of the release of one that was not).
+fn held(flag: &mut bool, state: &mut ModifiersState, bit: ModifiersState, down: bool) -> bool {
+    if *flag == down {
+        return false;
+    }
+    *flag = down;
+    if down {
+        *state |= bit;
+    } else {
+        // (`ModifiersState::remove` changes what it is given, returning nothing to assign)
+        state.remove(bit);
+    }
+    true
+}
+
 /// The tablet's pointers, as they were last heard from: what each is (a pen or a finger), where
 /// it is, its pressure and its lean, and whether it is down.
 #[derive(Clone, Debug, Default)]
@@ -167,6 +184,18 @@ impl Input {
         // what the pointer is: the interface's own input asks (a finger may give a pressure too)
         crate::pen::pointer_kind(id, pen);
         crate::pen::eraser_kind(id, eraser);
+        // the pen's lean, as the shell read it: radians from upright, and the direction it leans
+        // (the same pair the desktop's pens give, so the strokes take it as they do there). It goes
+        // with every touch, not only its landing, because a pen's lean changes while it draws — a
+        // brush that follows the barrel turns as the hand does.
+        if pen {
+            crate::pen::keep_pose(id, (tilt as f32, orientation as f32), None);
+        }
+        // the pen left the screen: the brush cursor has no lean to follow any more (a second pen
+        // still down is still the one heard from, so it stays)
+        if pen && matches!(phase, TouchPhase::Ended | TouchPhase::Cancelled) && !self.any_pen_down() {
+            crate::pen::pen_gone();
+        }
 
         // the interface's own input: a winit touch, as the desktop's pen and touches give it.
         // This side stays in *window pixels*, as winit's own touches are (the canvas lays itself
@@ -212,13 +241,23 @@ impl Input {
     pub fn hover(&mut self, id: u64, x: f64, y: f64, tilt: f64, orientation: f64, eraser: bool) {
         self.wants_frame = true;
         let mut now = self.pointers.get(&id).cloned().unwrap_or_default();
+        // a pointer that is already down has been heard from already: the shell says a mouse's
+        // move twice, once as a touch and once as a hover, and the move is not said again (nor is
+        // the pointer made to seem up while its button still is)
+        let dragging = now.down;
         now.pen = true;
         now.eraser = eraser;
         now.at = (x, y);
         now.tilt = tilt;
         now.orientation = orientation;
-        now.down = false;
+        now.down = dragging;
         self.pointers.insert(id, now);
+        // a pen near the screen leans too: the brush's outline turns with it as it comes into
+        // reach, before it ever touches (the desktop's pens are read the same way, winit or not)
+        crate::pen::keep_pose(id, (tilt as f32, orientation as f32), None);
+        if dragging {
+            return;
+        }
         // the interface's cursor follows it (its brush outline is the canvas's own)
         let ppp = f64::from(self.density);
         self.egui_events.push(egui::Event::PointerMoved(egui::pos2((x / ppp) as f32, (y / ppp) as f32)));
@@ -229,6 +268,14 @@ impl Input {
         self.wants_frame = true;
         self.pointers.remove(&id);
         self.egui_events.push(egui::Event::PointerGone);
+        if !self.any_pen_down() {
+            crate::pen::pen_gone();
+        }
+    }
+
+    /// Whether a pen is down (it is the one the brush cursor follows while it draws).
+    fn any_pen_down(&self) -> bool {
+        self.pointers.values().any(|p| p.down && p.pen)
     }
 
     /// A key went down or up. `text` is what it types, when it types anything (a soft keyboard's
@@ -239,66 +286,49 @@ impl Input {
         if let Some(code) = code {
             self.keys.push((code, pressed, repeat));
         }
-        // egui: a key's press, and what it types
-        if pressed && !repeat {
-            let mut modifiers = self.modifiers;
-            match &named {
-                Some(NamedKey::Shift) => {
-                    modifiers.shift = true;
-                    self.modifiers.shift = true;
-                }
-                Some(NamedKey::Control) => {
-                    modifiers.ctrl = true;
-                    self.modifiers.ctrl = true;
-                }
-                Some(NamedKey::Alt) => {
-                    modifiers.alt = true;
-                    self.modifiers.alt = true;
-                }
-                Some(NamedKey::Meta) => {
-                    modifiers.mac_cmd = true;
-                    self.modifiers.mac_cmd = true;
-                }
-                _ => {}
-            }
-            if let Some(key) = egui_key(named, character) {
-                self.egui_events.push(egui::Event::Key {
-                    key,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers,
-                });
-            }
-            if let Some(c) = character
-                && !modifiers.ctrl
-                && !modifiers.mac_cmd
-            {
-                self.egui_events.push(egui::Event::Text(c.to_string()));
-            }
-        } else if !pressed {
-            if let Some(key) = egui_key(named, character) {
-                self.egui_events.push(egui::Event::Key {
-                    key,
-                    physical_key: None,
-                    pressed: false,
-                    repeat: false,
-                    modifiers: self.modifiers,
-                });
-            }
-            match named {
-                Some(NamedKey::Shift) => self.modifiers.shift = false,
-                Some(NamedKey::Control) => self.modifiers.ctrl = false,
-                Some(NamedKey::Alt) => self.modifiers.alt = false,
-                Some(NamedKey::Meta) => {
-                    self.modifiers.mac_cmd = false;
-                    self.modifiers.command = false;
-                }
-                _ => {}
-            }
+        // egui: the key's press or release, with the modifiers as they were while it was typed
+        // (winit says a key before it says what is held with it)
+        if let Some(key) = egui_key(named, character) {
+            self.egui_events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: pressed && repeat,
+                modifiers: self.modifiers,
+            });
         }
-        self.winit_modifiers = ModifiersState::empty();
-        self.window_events.push(WindowEvent::ModifiersChanged(self.winit_modifiers.into()));
+        if pressed
+            && !repeat
+            && !self.modifiers.ctrl
+            && !self.modifiers.mac_cmd
+            && let Some(c) = character
+        {
+            self.egui_events.push(egui::Event::Text(c.to_string()));
+        }
+        // A modifier is held or let go as any other key is: the shell hands the keys over one at a
+        // time and says nothing else of them, so what is held is built up here, key by key, and is
+        // said when it changes. It is never emptied wholesale, as it was: the last event of a
+        // keystroke is its release, so an emptied state left the app believing nothing was held
+        // while the key still was (every Ctrl and Shift shortcut went, and a pen turning the canvas
+        // with R let go of Shift at the first key it came with).
+        let changed = match &named {
+            Some(NamedKey::Shift) => held(&mut self.modifiers.shift, &mut self.winit_modifiers, ModifiersState::SHIFT, pressed),
+            Some(NamedKey::Control) => {
+                held(&mut self.modifiers.ctrl, &mut self.winit_modifiers, ModifiersState::CONTROL, pressed)
+            }
+            Some(NamedKey::Alt) => held(&mut self.modifiers.alt, &mut self.winit_modifiers, ModifiersState::ALT, pressed),
+            Some(NamedKey::Meta) => {
+                held(&mut self.modifiers.mac_cmd, &mut self.winit_modifiers, ModifiersState::SUPER, pressed)
+            }
+            _ => false,
+        };
+        // Ctrl is this platform's command key, as ⌘ is a Mac's: egui's `Modifiers::COMMAND` is taken
+        // by `command` and never by `ctrl`, so the two are kept together (every shortcut the
+        // interface has — Save, New, Open, Copy — asks for `Modifiers::COMMAND`)
+        self.modifiers.command = self.modifiers.ctrl || self.modifiers.mac_cmd;
+        if changed {
+            self.window_events.push(WindowEvent::ModifiersChanged(self.winit_modifiers.into()));
+        }
     }
 
     /// What a soft keyboard typed (its characters come without a key of their own).
@@ -329,9 +359,24 @@ impl Input {
         self.window_events.push(WindowEvent::Resized(winit::dpi::PhysicalSize::new(width, height)));
     }
 
-    /// A finger or a mouse scrolled (two fingers' pinch comes as a zoom, not a scroll).
-    pub fn scroll(&mut self, x: f32, y: f32) {
+    /// The pointer scrolled: `at` is where it is (window pixels), `(x, y)` what it scrolled by.
+    ///
+    /// Nothing calls this yet. The shell registers a touch, a mouse, a hover and a key callback and
+    /// no other (`napi_init.cpp`), and the one that would carry a scroll —
+    /// `OH_NativeXComponent_RegisterUIInputEventCallback`, whose `ARKUI_UIINPUTEVENT_TYPE_AXIS`
+    /// events are a wheel's or a trackpad's slides — is never registered. So a mouse's wheel and a
+    /// two-finger slide reach the app not at all: the interface does not scroll, and the view
+    /// neither pans nor zooms with them. What the shell must do is written up in the review; this
+    /// side is ready for it.
+    pub fn scroll(&mut self, at: (f64, f64), x: f32, y: f32) {
         self.wants_frame = true;
+        // The interface's own input takes a wheel where the pointer is, and it learns where that is
+        // from a move and from nothing else (`input.rs`, `CursorMoved`): a wheel comes with no move
+        // of its own, so one is made here, as winit would have made it.
+        self.window_events.push(WindowEvent::CursorMoved {
+            device_id: DeviceId::dummy(),
+            position: PhysicalPosition::new(at.0, at.1),
+        });
         self.egui_events.push(egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(x, y),

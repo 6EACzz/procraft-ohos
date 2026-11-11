@@ -112,8 +112,8 @@ pub fn barrel() -> Option<f32> {
 }
 
 /// Pointer `id`'s lean and roll as they now are; it is the pen last heard from.
-#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
-fn keep_pose(id: u64, lean: (f32, f32), roll: Option<f32>) {
+#[cfg_attr(not(any(windows, target_os = "linux", target_env = "ohos")), allow(dead_code))]
+pub(crate) fn keep_pose(id: u64, lean: (f32, f32), roll: Option<f32>) {
     if let Ok(mut leans) = LEANS.lock() {
         leans.get_or_insert_with(Default::default).insert(id, lean);
     }
@@ -130,8 +130,8 @@ fn keep_pose(id: u64, lean: (f32, f32), roll: Option<f32>) {
 }
 
 /// No pen is near the window any more.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn pen_gone() {
+#[cfg_attr(not(any(target_os = "linux", target_env = "ohos")), allow(dead_code))]
+pub(crate) fn pen_gone() {
     if let Ok(mut latest) = LATEST.lock() {
         *latest = None;
     }

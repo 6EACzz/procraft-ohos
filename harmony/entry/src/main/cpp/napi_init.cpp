@@ -19,26 +19,10 @@
 #define LOG_DOMAIN 0x3200
 #define LOG_TAG "ProCraft"
 
-// The app's own code (the desktop's interface, built as a library: `libprocraft_ui.so`).
-extern "C" {
-void procraft_start(void* window, uint32_t width, uint32_t height, float pixels_per_point);
-void procraft_own_folder(const uint8_t* bytes, size_t length);
-void procraft_surface_destroyed();
-void procraft_wake();
-void procraft_touch(uint64_t id, uint32_t phase, double x, double y, double pressure, double tilt,
-                    double orientation, bool pen, bool eraser);
-void procraft_hover(uint64_t id, double x, double y, double tilt, double orientation, bool eraser);
-void procraft_hover_out(uint64_t id);
-void procraft_key(uint32_t code, uint32_t text, bool pressed, bool repeat);
-void procraft_text(const uint8_t* bytes, size_t length);
-void procraft_resized(uint32_t width, uint32_t height);
-void procraft_scale(float pixels_per_point);
-void procraft_focused(bool focused);
-void procraft_dropped_file(const uint8_t* bytes, size_t length);
-const char* procraft_asks();
-void procraft_asks_free(const char* text);
-void procraft_answer(uint64_t id, const char* paths, const char* clipboard, bool done);
-}
+// The app's own code (the desktop's interface, built as a library: `libprocraft_ui.so`) — the
+// declarations of what it gives us live in one place, so this file and the app's side of them
+// cannot drift apart.
+#include "procraft_ffi.h"
 
 namespace {
 
@@ -47,17 +31,30 @@ OH_NativeXComponent* g_component = nullptr;
 void* g_window = nullptr;
 uint32_t g_width = 0;
 uint32_t g_height = 0;
+// The page's density (its vp to its pixels). 2.0f is only a guess for the frames before the page
+// has been laid out: it sends the real one as soon as it has (`setScale`), and this keeps it so
+// that a start coming after that measurement starts at the right density (a start coming before
+// it is put right by the `procraft_scale` that `setScale` sends, once the app is up).
 float g_scale = 2.0f;
-// The shell's own callbacks (a file picked, a message seen), which it sets from ArkTS.
-napi_env g_env = nullptr;
-napi_ref g_ask_ref = nullptr;
+
+// The page's own measurement of the surface, in pixels (what `resized` was last given by
+// `onAreaChange`). The component's size is documented in vp, so it is not the same number; once
+// the page has said, what it said is the surface's real size and the component's own report must
+// not overwrite it with a value in another unit.
+bool g_size_from_page = false;
+uint32_t g_page_width = 0;
+uint32_t g_page_height = 0;
 
 // A JS string out of a N-API value, as UTF-8.
 std::string StringOf(napi_env env, napi_value value) {
     size_t length = 0;
     if (napi_get_value_string_utf8(env, value, nullptr, 0, &length) != napi_ok) return {};
-    std::string text(length, '\0');
-    napi_get_value_string_utf8(env, value, text.data(), length + 1, &length);
+    // `napi_get_value_string_utf8` writes the string *and* the NUL that ends it, so the buffer
+    // has to hold one more byte than the length it reported (asking for `length + 1` into a
+    // `length`-sized string writes one byte past its end).
+    std::string text(length + 1, '\0');
+    napi_get_value_string_utf8(env, value, text.data(), text.size(), &length);
+    text.resize(length);
     return text;
 }
 
@@ -82,9 +79,19 @@ void OnSurfaceCreated(OH_NativeXComponent* component, void* window) {
     OH_NativeXComponent_GetXComponentSize(component, window, &width, &height);
     g_component = component;
     g_window = window;
-    g_width = static_cast<uint32_t>(width);
-    g_height = static_cast<uint32_t>(height);
+    if (g_size_from_page) {
+        // the page has already measured the surface in its own pixels (this is a surface coming
+        // back — the panel turned, or the page was rebuilt): its measurement is the surface's
+        // real size, and the component's own report here is documented in vp
+        g_width = g_page_width;
+        g_height = g_page_height;
+    } else {
+        g_width = static_cast<uint32_t>(width);
+        g_height = static_cast<uint32_t>(height);
+    }
     OH_LOG_INFO(LOG_APP, "the surface is ready: %{public}ux%{public}u", g_width, g_height);
+    // (this is only the size the app starts at: the page's own measurement in pixels comes through
+    // `resized` as soon as it is laid out, and is the one the app resizes to)
     procraft_start(window, g_width, g_height, g_scale);
 }
 
@@ -97,6 +104,13 @@ void OnSurfaceChanged(OH_NativeXComponent* component, void* window) {
     g_width = static_cast<uint32_t>(width);
     g_height = static_cast<uint32_t>(height);
     OH_LOG_INFO(LOG_APP, "the surface is now %{public}ux%{public}u", g_width, g_height);
+    if (g_size_from_page) {
+        // the page has measured the surface itself, in its pixels, and that measurement is the
+        // one to keep: this one is documented in vp, and handing it over would resize the app's
+        // drawing to a size in the other unit (the page's own `resized` follows this callback
+        // anyway, and is what actually resizes)
+        return;
+    }
     procraft_resized(g_width, g_height);
 }
 
@@ -104,11 +118,16 @@ void OnSurfaceChanged(OH_NativeXComponent* component, void* window) {
 void OnSurfaceDestroyed(OH_NativeXComponent* component, void* window) {
     OH_LOG_INFO(LOG_APP, "the surface is gone");
     procraft_surface_destroyed();
+    // both cleared: a touch or a key still in flight must not be passed on to an app that has been
+    // asked to stop (the dispatch handlers below let nothing through while there is no window)
     g_window = nullptr;
+    g_component = nullptr;
 }
 
 // A touch came: a finger's, or the pen's.
 void OnTouch(OH_NativeXComponent* component, void* window) {
+    // nothing to draw into, and nothing to draw with: the surface is on its way in or out
+    if (g_window == nullptr) return;
     OH_NativeXComponent_TouchEvent event;
     if (OH_NativeXComponent_GetTouchEvent(component, window, &event) != OH_NATIVEXCOMPONENT_RESULT_SUCCESS) return;
     OH_LOG_INFO(LOG_APP, "a touch: %{public}u points", event.numPoints);
@@ -162,6 +181,7 @@ OH_NativeXComponent_Callback g_callback = {
 constexpr uint64_t MOUSE_ID = 0xFFFF;
 
 void OnMouse(OH_NativeXComponent* component, void* window) {
+    if (g_window == nullptr) return;
     OH_NativeXComponent_MouseEvent event;
     if (OH_NativeXComponent_GetMouseEvent(component, window, &event) != OH_NATIVEXCOMPONENT_RESULT_SUCCESS) return;
     const double x = static_cast<double>(event.x);
@@ -184,14 +204,10 @@ void OnMouse(OH_NativeXComponent* component, void* window) {
     }
 }
 
-void OnMouseHover(OH_NativeXComponent* component, void* window) {
-    OnMouse(component, window);
-}
-
 void OnHover(OH_NativeXComponent* component, bool isHover) {
     if (!isHover) {
         // the mouse left: the brush's outline goes
-        procraft_hover_out(0xFFFF);
+        procraft_hover_out(MOUSE_ID);
     }
 }
 
@@ -201,6 +217,18 @@ OH_NativeXComponent_MouseEvent_Callback g_mouse_callback = {
 };
 
 // A hardware key came (a keyboard attached, or the pen's own buttons).
+//
+// This can only say *which* key and whether it went down: the native key event hands over the
+// code and the action and nothing else — there is no accessor on it for the character the key
+// typed, nor for whether the system is repeating it (see `OH_NativeXComponent_KeyEvent` in
+// `native_interface_xcomponent.h`). So `text` stays 0 and `repeat` false here.
+//
+// Nothing is lost by that for the ordinary keys: the app works the character of a letter, digit
+// or punctuation mark out of the key's code itself (`key_of` in `ohos_main.rs`). A character no
+// key code spells — a composed CJK glyph, an accent — is the one thing this cannot carry, and it
+// comes from the page instead (`onKeyEvent` in `Index.ets` knows its `keyText` and passes the
+// non-ASCII ones through `procraft.text`, which is also the way the soft keyboard's characters
+// arrive).
 void OnKey(OH_NativeXComponent* component, void* window) {
     OH_NativeXComponent_KeyEvent* event = nullptr;
     if (OH_NativeXComponent_GetKeyEvent(component, &event) != OH_NATIVEXCOMPONENT_RESULT_SUCCESS || event == nullptr) return;
@@ -213,24 +241,6 @@ void OnKey(OH_NativeXComponent* component, void* window) {
     procraft_key(static_cast<uint32_t>(code), 0, pressed, false);
 }
 
-// The app's own asks, answered by the shell: `procraftAsk(kind, json)` returns a string (a path,
-// JSON of paths, the clipboard's contents) or nothing.
-napi_value CallShell(napi_env env, const char* kind, const std::string& payload) {
-    if (g_ask_ref == nullptr) return nullptr;
-    napi_value ask = nullptr;
-    if (napi_get_reference_value(env, g_ask_ref, &ask) != napi_ok || ask == nullptr) return nullptr;
-    napi_value global = nullptr;
-    napi_get_global(env, &global);
-    napi_value kind_value = nullptr;
-    napi_create_string_utf8(env, kind, NAPI_AUTO_LENGTH, &kind_value);
-    napi_value payload_value = nullptr;
-    napi_create_string_utf8(env, payload.c_str(), payload.size(), &payload_value);
-    napi_value argv[2] = {kind_value, payload_value};
-    napi_value answer = nullptr;
-    if (napi_call_function(env, global, ask, 2, argv, &answer) != napi_ok) return nullptr;
-    return answer;
-}
-
 // The folder the app keeps its own files in (a tablet's sandbox: nothing under $HOME is writable).
 napi_value SetOwnFolder(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -239,21 +249,6 @@ napi_value SetOwnFolder(napi_env env, napi_callback_info info) {
     if (argc < 1) return nullptr;
     std::string dir = StringOf(env, argv[0]);
     procraft_own_folder(reinterpret_cast<const uint8_t*>(dir.data()), dir.size());
-    return nullptr;
-}
-
-// The shell's way to answer: its own function, kept for the app's asks.
-napi_value SetAsk(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
-    napi_value argv[1] = {nullptr};
-    napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
-    if (argc < 1) return nullptr;
-    if (g_ask_ref != nullptr) {
-        napi_delete_reference(env, g_ask_ref);
-        g_ask_ref = nullptr;
-    }
-    napi_create_reference(env, argv[0], 1, &g_ask_ref);
-    g_env = env;
     return nullptr;
 }
 
@@ -282,6 +277,11 @@ napi_value Resized(napi_env env, napi_callback_info info) {
     if (width == 0 || height == 0) return nullptr;
     g_width = width;
     g_height = height;
+    // this side has measured the surface itself, so it is the one that counts (see
+    // `OnSurfaceChanged`, which stops resizing to the component's own report once this is set)
+    g_size_from_page = true;
+    g_page_width = width;
+    g_page_height = height;
     procraft_resized(width, height);
     return nullptr;
 }
@@ -375,12 +375,21 @@ napi_value Wake(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
+// Whether the app has something of its own to close before the shell should close the app: the
+// page asks this when BACK is pressed (see `onBackPress` in `Index.ets`), so BACK closes a dialog
+// or a panel of the app's rather than leaving the whole app.
+napi_value CanGoBack(napi_env env, napi_callback_info info) {
+    napi_value result = nullptr;
+    // (a boolean always: the page reads it as one, and an undefined is not)
+    napi_get_boolean(env, procraft_can_go_back(), &result);
+    return result;
+}
+
 } // namespace
 
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
-        {"setAsk", nullptr, SetAsk, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setOwnFolder", nullptr, SetOwnFolder, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setScale", nullptr, SetScale, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"resized", nullptr, Resized, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -391,6 +400,7 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"wake", nullptr, Wake, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"asks", nullptr, Asks, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"answer", nullptr, Answer, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"canGoBack", nullptr, CanGoBack, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
 

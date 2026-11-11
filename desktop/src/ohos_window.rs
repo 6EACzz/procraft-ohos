@@ -7,8 +7,6 @@
 
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use procraft_gpu::wgpu;
 use raw_window_handle::{OhosDisplayHandle, OhosNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
@@ -22,32 +20,33 @@ pub struct NativeWindow(pub(crate) *mut c_void);
 unsafe impl Send for NativeWindow {}
 unsafe impl Sync for NativeWindow {}
 
-/// Windows handed over and not yet attached, by id.
-static WINDOWS: Mutex<Vec<(u64, NativeWindow)>> = Mutex::new(Vec::new());
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-
-/// Takes the window registered as `id`.
-pub fn take(id: u64) -> Option<NativeWindow> {
-    let mut windows = WINDOWS.lock().unwrap_or_else(|e| e.into_inner());
-    let at = windows.iter().position(|(i, _)| *i == id)?;
-    Some(windows.swap_remove(at).1)
+#[link(name = "native_window")]
+unsafe extern "C" {
+    /// Counts one more holder of the window: the system frees it only when the count is nought.
+    fn OH_NativeWindow_NativeObjectReference(obj: *mut c_void) -> i32;
+    /// Lets go of one holder of the window.
+    fn OH_NativeWindow_NativeObjectUnreference(obj: *mut c_void) -> i32;
 }
 
-/// Registers `window` (the XComponent's `OHNativeWindow`) and returns its id, for
-/// [`CanvasSession::attach_window`](procraft_core::CanvasSession::attach_window): 0 if there is
-/// no window.
-pub fn acquire(window: *mut c_void) -> u64 {
-    if window.is_null() {
-        return 0;
+/// Holds the window for as long as the app draws into it. The system destroys an XComponent's
+/// window as soon as the shell has been told the surface went (as `OnSurfaceDestroyed` returns),
+/// while the app's thread may still be drawing the frame it was in the middle of: holding the
+/// window keeps it alive until [`let_go`] says the last frame is done, so what is drawn is drawn
+/// into a window that is still there (nothing shows it, and nothing draws into freed memory).
+pub fn hold(window: NativeWindow) -> NativeWindow {
+    if !window.0.is_null() {
+        // SAFETY: the handle is the live OHNativeWindow the shell was given
+        unsafe { OH_NativeWindow_NativeObjectReference(window.0) };
     }
-    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    WINDOWS.lock().unwrap_or_else(|e| e.into_inner()).push((id, NativeWindow(window)));
-    id
+    window
 }
 
-/// Lets go of a window that was never attached.
-pub fn release(id: u64) {
-    drop(take(id));
+/// Lets go of a window [`hold`] held, once nothing draws into it (the app's thread has stopped).
+pub fn let_go(window: NativeWindow) {
+    if !window.0.is_null() {
+        // SAFETY: the caller holds the one reference `hold` took
+        unsafe { OH_NativeWindow_NativeObjectUnreference(window.0) };
+    }
 }
 
 /// A wgpu surface on `window`. The caller keeps `window` alive until the surface is dropped.
@@ -57,7 +56,7 @@ pub fn create_surface(instance: &wgpu::Instance, window: &NativeWindow) -> Resul
         raw_display_handle: Some(RawDisplayHandle::Ohos(OhosDisplayHandle::new())),
         raw_window_handle: RawWindowHandle::OhosNdk(OhosNdkWindowHandle::new(handle)),
     };
-    // SAFETY: the handle is a live OHNativeWindow, and the render thread, which owns both, drops
-    // the surface before the window
+    // SAFETY: the handle is a live OHNativeWindow (held by the caller as `hold` took it), and the
+    // render thread, which owns both, drops the surface before the window
     unsafe { instance.create_surface_unsafe(target) }.map_err(|e| e.to_string())
 }

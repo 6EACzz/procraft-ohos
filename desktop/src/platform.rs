@@ -98,6 +98,15 @@ pub fn clipboard_write_text(text: &str) {
     system::clipboard_write_text(text)
 }
 
+/// The soft keyboard is to show, a field of the interface being typed in, or to go.
+///
+/// The desktop needs nothing of it: its keyboard is the one on the desk, and a window that needs
+/// no on-screen one never says so. A tablet's is the system's, shown over its own window, and the
+/// shell shows and hides it.
+pub fn keyboard(shown: bool) {
+    system::keyboard(shown)
+}
+
 /// The platform's answers: the desktop's own dialogs and clipboard, or the shell's.
 mod system {
     use super::{Clipboard, Picked, PickedPaths};
@@ -166,6 +175,11 @@ mod system {
         }
     }
 
+    /// Nothing to show or hide: the desktop's keyboard is not the window's to put away, and a
+    /// field being typed in takes its letters from the keys of the machine.
+    #[cfg(not(target_env = "ohos"))]
+    pub fn keyboard(_shown: bool) {}
+
     // On HarmonyOS the shell (ArkTS) owns the dialogs and the clipboard: each is asked over N-API
     // and answered when the system hands it back (see `ohos_platform.rs`).
     #[cfg(target_env = "ohos")]
@@ -191,5 +205,10 @@ mod system {
     #[cfg(target_env = "ohos")]
     pub fn clipboard_write_text(text: &str) {
         crate::ohos_platform::clipboard_write_text(text)
+    }
+
+    #[cfg(target_env = "ohos")]
+    pub fn keyboard(shown: bool) {
+        crate::ohos_platform::keyboard(shown)
     }
 }

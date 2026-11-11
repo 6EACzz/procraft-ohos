@@ -257,11 +257,13 @@ impl Host for TabletHost {
     }
 
     fn gl_busy(&self) -> bool {
-        false
+        // a thread making the canvases' pipelines holds the GL context the frame draws with: the
+        // frame waits for it (a frame drawn beside it would be drawn into what it is drawing)
+        self.screen.gl_busy()
     }
 
     fn canvases_later(&self) -> bool {
-        false
+        self.screen.canvases_later()
     }
 
     fn tried(&self) -> (usize, bool) {
@@ -307,12 +309,11 @@ fn tell(said: Said) {
     }
 }
 
-/// The window's surface is ready (the XComponent made one): the app starts, drawing in it on a
-/// thread of its own.
+/// The app's own folder: where it keeps what it saves (the shell reads the path from the system's
+/// own API and hands it over), so a save lands where the app may write.
 ///
 /// # Safety
-/// `window` is a live `OHNativeWindow` from the shell's XComponent, kept alive until
-/// `procraft_surface_destroyed` says otherwise.
+/// `bytes` is `length` readable bytes (UTF-8: the folder's path).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_own_folder(bytes: *const u8, length: usize) {
     if bytes.is_null() || length == 0 {
@@ -325,6 +326,12 @@ pub unsafe extern "C" fn procraft_own_folder(bytes: *const u8, length: usize) {
     }
 }
 
+/// The window's surface is ready (the XComponent made one): the app starts, drawing in it on a
+/// thread of its own.
+///
+/// # Safety
+/// `window` is a live `OHNativeWindow` from the shell's XComponent, kept alive until
+/// `procraft_surface_destroyed` says otherwise.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height: u32, pixels_per_point: f32) {
     if window.is_null() {
@@ -342,16 +349,23 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
         }
     }
     log::info!("ProCraft starts: {width}x{height} pixels, {pixels_per_point} pixels per point");
-    // a surface that went left its app stopping: waited for here (this is the app's own thread,
-    // not the shell's), so two never draw at once
-    join_stopped();
+    // a surface that went left its app stopping: the thread it was drawing on is waited for, but
+    // not here. This is the shell's own thread, which is the only thread the app's asks are
+    // answered on, so waiting here would wait for an answer only this thread could give, and hold
+    // the window for as long as the ask's own timeout (ten minutes for a person's). The new
+    // thread waits instead, before it begins: two never draw at once, and neither reads the
+    // artwork's files while the other writes them.
+    let stopping = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take();
     let loop_ = Arc::new(TabletLoop::new());
     let wake = {
         let loop_ = Arc::clone(&loop_);
         Arc::new(move || loop_.wake())
     };
     let order: Vec<usize> = (0..procraft_gpu::Gpu::backend_count().max(1)).collect();
-    let window = NativeWindow(window);
+    // held for as long as the app draws into it: the system destroys the window the moment the
+    // shell's `OnSurfaceDestroyed` returns, while the app's thread may still be drawing the frame
+    // it was in the middle of. Held, it stays alive until the thread that drew it has stopped.
+    let window = crate::ohos_window::hold(NativeWindow(window));
     let made = OhosScreen::new(
         &window,
         (width, height),
@@ -384,10 +398,26 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
     *SAID.lock().unwrap_or_else(|e| e.into_inner()) = Some(sender);
     *WAKE.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&loop_));
     match std::thread::Builder::new().name("procraft-tablet".to_owned()).spawn(move || {
+        // (the surface before this one's app has stopped by now, or stops now: the shell's thread
+        // is free again the moment this one starts waiting, so an ask it is in the middle of can
+        // still be answered)
+        stop_before(stopping);
         run_loop(app, loop_, said);
+        // nothing draws into the window any more: the system may free it now (the shell has long
+        // since been told the surface went, and its own reference went with it)
+        crate::ohos_window::let_go(window);
     }) {
         Ok(thread) => *RUNNING.lock().unwrap_or_else(|e| e.into_inner()) = Some(thread),
         Err(e) => log::error!("the app's thread: {e}"),
+    }
+}
+
+/// Waits for the surface before this one's app to have stopped, on the thread that is about to
+/// draw (never the shell's, which is the one the asks are answered on).
+fn stop_before(stopping: Option<std::thread::JoinHandle<()>>) {
+    let Some(stopping) = stopping else { return };
+    if stopping.join().is_err() {
+        log::error!("the app's thread stopped with a panic");
     }
 }
 
@@ -445,6 +475,13 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         // what the files written on their own threads had to say (a save that failed, an export
         // done): the desktop's loop says it each pass, and nothing else ever would
         crate::files::tell_what_was_told();
+        // a file still being written: looked at again soon, so what it says when it is done is
+        // seen (the desktop's `about_to_wait` re-arms the same way: nothing else would wake the
+        // loop for it, and the last thing a save does is say it worked)
+        if crate::files::still_writing() {
+            let soon = Instant::now() + Duration::from_millis(250);
+            app.again = Some(app.again.map_or(soon, |due| due.min(soon)));
+        }
         // the graphics device stopped (a driver reset, the system taking the GPU away): nothing it
         // made can be drawn again. The desktop starts itself again on another backend, which this
         // window can't do (its surface is the shell's): it says so and keeps the artwork, so what

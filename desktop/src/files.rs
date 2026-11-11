@@ -202,19 +202,35 @@ pub fn take_pending_brushes() -> Vec<(Vec<u8>, String)> {
 pub fn tell(title: &str, text: &str) {
     log::error!("{title}: {text}");
     eprintln!("{title}: {text}");
-    if cfg!(target_os = "linux") && !has_program("zenity") {
-        // what shows the app's dialogs on Linux isn't there: the first that is of the others
-        let shown = other_dialogs(title, text).iter().any(|(program, args)| {
-            std::process::Command::new(program).args(args).status().is_ok_and(|done| done.success())
-        });
-        if shown {
-            return;
-        }
+    if shown_another_way(title, text) {
+        return;
     }
     crate::platform::say(title, text, true);
 }
 
+/// Whether a program of the system showed `text` where the app's own dialogs can't: Linux desktops
+/// that lack zenity may have kdialog or xmessage.
+#[cfg(not(target_env = "ohos"))]
+fn shown_another_way(title: &str, text: &str) -> bool {
+    if !cfg!(target_os = "linux") || has_program("zenity") {
+        return false;
+    }
+    // what shows the app's dialogs on Linux isn't there: the first that is of the others
+    other_dialogs(title, text).iter().any(|(program, args)| {
+        std::process::Command::new(program).args(args).status().is_ok_and(|done| done.success())
+    })
+}
+
+/// Whether a program of the system showed `text`: never on the tablet, which has none of them and
+/// whose shell shows what the app has to say (`ohos_platform::say`). Forking one process per
+/// message there would only fail, and on the thread the canvas is drawn on.
+#[cfg(target_env = "ohos")]
+fn shown_another_way(_title: &str, _text: &str) -> bool {
+    false
+}
+
 /// Whether `program` can be run here.
+#[cfg(not(target_env = "ohos"))]
 fn has_program(program: &str) -> bool {
     std::process::Command::new(program)
         .arg("--version")
@@ -226,6 +242,7 @@ fn has_program(program: &str) -> bool {
 
 /// The programs that can show a message where the app's own dialogs can't, in the order to try
 /// them, each with its arguments.
+#[cfg(not(target_env = "ohos"))]
 fn other_dialogs(title: &str, text: &str) -> [(&'static str, Vec<String>); 3] {
     let (title, text) = (title.to_owned(), text.to_owned());
     [
@@ -315,6 +332,9 @@ pub fn save_file(bytes: &[u8], name: &str, extension: &str, kind: &str) {
     let Some(path) = picked.into_iter().next() else {
         return;
     };
+    if !a_place(&path) {
+        return;
+    }
     // a file there already is replaced only once this one is written whole
     if let Err(e) = write_whole(&path, bytes) {
         tell("Can't share", &e.to_string());
@@ -326,24 +346,24 @@ pub fn pick_sound(title: &str) -> Option<(Vec<u8>, String)> {
     let path = crate::platform::pick(crate::platform::Picked::default().title(title).filter("Sounds", &["wav", "wave"]))
         .into_iter()
         .next()?;
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    match std::fs::read(&path) {
-        Ok(bytes) => Some((bytes, name)),
-        Err(_) => {
-            say("This file could not be read.");
-            None
-        }
-    }
+    read_picked(path)
 }
 
 /// A file the user picks (titled `title`), read whole, with its name.
 pub fn pick_file(title: &str) -> Option<(Vec<u8>, String)> {
     let path = crate::platform::pick(crate::platform::Picked::default().title(title)).into_iter().next()?;
+    read_picked(path)
+}
+
+/// What the file the user picked at `path` holds, read whole, with its name; saying so when it
+/// can't be read (a URI the shell couldn't stage is a different thing from an unreadable file, and
+/// is worth its own words).
+fn read_picked(path: PathBuf) -> Option<(Vec<u8>, String)> {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    match std::fs::read(&path) {
+    match read_path(&path) {
         Ok(bytes) => Some((bytes, name)),
         Err(_) => {
-            say("This file could not be read.");
+            say(if openable(&path) { "This file could not be read." } else { NOT_A_PATH });
             None
         }
     }
@@ -434,12 +454,71 @@ pub fn keep_text(name: &str, text: &str) {
     }
 }
 
+/// How many files have been staged beside their own, so two writes of one file don't stage into
+/// the same one (see [`write_whole`]).
+static STAGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 /// Writes `bytes` to the app's file `path` whole or not at all: into a file beside it, then
 /// renamed over it, so a write cut short leaves the last one.
+///
+/// The file beside it keeps the whole name — `art.procraft` stages as `art.procraft.7.next` — so
+/// two saves of one name, or of `art.procraft` and `art.png` (which replacing the extension would
+/// have staged as one `art.next`), never write into one another.
 pub fn write_whole(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    let next = path.with_extension("next");
-    std::fs::write(&next, bytes)?;
-    std::fs::rename(&next, path)
+    let staged = STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut beside = path.file_name().map(|name| name.to_os_string()).unwrap_or_default();
+    beside.push(format!(".{staged}.next"));
+    let next = path.with_file_name(beside);
+    let written = std::fs::write(&next, bytes).and_then(|()| std::fs::rename(&next, path));
+    if written.is_err() {
+        // (half of a file the user never asked for is worse than nothing)
+        let _ = std::fs::remove_file(&next);
+    }
+    written
+}
+
+/// Whether `path` is one this app can read as a file at all: a value still a `file://…` (or any
+/// other scheme's) URI is not a path, and every read of it would fail with a reason that says
+/// nothing about the real one — the shell couldn't stage that file into the app's own folder.
+pub fn openable(path: &Path) -> bool {
+    !path.to_string_lossy().contains("://")
+}
+
+/// The bytes of file `path`, saying so in the log when what the shell gave is a URI rather than a
+/// path (see [`openable`]).
+pub fn read_path(path: &Path) -> std::io::Result<Vec<u8>> {
+    if !openable(path) {
+        log::warn!("a file the shell gave is a URI, not a path: {}", path.display());
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "a URI rather than a path"));
+    }
+    std::fs::read(path)
+}
+
+/// What is said of a file the shell gave as a link rather than as a path (see [`openable`]).
+const NOT_A_PATH: &str = "The system gave this file as a link rather than as a path, which ProCraft can't open.";
+
+/// Whether `path` is one to go on with, saying so when it isn't: see [`openable`] and
+/// [`NOT_A_PATH`].
+fn a_path(path: &Path) -> bool {
+    if openable(path) {
+        return true;
+    }
+    log::warn!("a file the shell gave is a URI, not a path: {}", path.display());
+    tell_later("Can't open", NOT_A_PATH);
+    false
+}
+
+/// What is said when the shell gave the place to write to as a link rather than as a path.
+const NOT_A_PLACE: &str = "The system gave this place as a link rather than as a path, which ProCraft can't write to.";
+
+/// Whether `path` is a place to write to, saying so when it isn't: see [`openable`].
+fn a_place(path: &Path) -> bool {
+    if openable(path) {
+        return true;
+    }
+    log::warn!("a place the shell gave is a URI, not a path: {}", path.display());
+    tell_later("Can't save", NOT_A_PLACE);
+    false
 }
 
 /// A new artwork as `preset` says: its size, DPI, background and colour profile.
@@ -466,9 +545,9 @@ pub fn import_profile() -> Option<String> {
     let path = crate::platform::pick(crate::platform::Picked::default().title("Import").filter("Color profiles", &["icc", "icm"]))
         .into_iter()
         .next()?;
-    let name = std::fs::read(path).ok().and_then(procraft_core::import_profile);
+    let name = read_path(&path).ok().and_then(procraft_core::import_profile);
     if name.is_none() {
-        tell("Can't import", "This file isn't a color profile.");
+        tell("Can't import", if openable(&path) { "This file isn't a color profile." } else { NOT_A_PATH });
     }
     name
 }
@@ -482,22 +561,27 @@ pub fn is_plugin_file(path: &Path) -> bool {
 
 /// A plugin file the user picks.
 pub fn pick_plugin() -> Option<PathBuf> {
-    crate::platform::pick(crate::platform::Picked::default().title("Import").filter("ProCraft plugins", &["procraft-plugin", "procraftplugin"]))
+    let path = crate::platform::pick(crate::platform::Picked::default().title("Import").filter("ProCraft plugins", &["procraft-plugin", "procraftplugin"]))
         .into_iter()
-        .next()
+        .next()?;
+    a_path(&path).then_some(path)
 }
 
 /// A picture the user picks (PNG, JPEG, WebP, GIF, BMP or TIFF), to make a new artwork of
 /// ([`picture_artwork`]).
 pub fn pick_picture() -> Option<PathBuf> {
-    crate::platform::pick(crate::platform::Picked::default().title("Photo").filter("Pictures", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"]))
+    let path = crate::platform::pick(crate::platform::Picked::default().title("Photo").filter("Pictures", &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"]))
         .into_iter()
-        .next()
+        .next()?;
+    a_path(&path).then_some(path)
 }
 
 /// The picture at `path` as a new one-layer artwork its size, named after the file; why not if
 /// it can't be read.
 pub fn picture_artwork(path: &Path) -> Result<Arc<CanvasSession>, String> {
+    if !a_path(path) {
+        return Err(NOT_A_PATH.to_owned());
+    }
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let picture = image::open(path).map_err(|e| e.to_string())?;
     let rgba = picture.to_rgba8();
@@ -572,6 +656,9 @@ pub fn open_artwork_files(paths: Vec<PathBuf>) -> Option<(Arc<CanvasSession>, Op
         return open_model(model, &paths).map(|s| (s, None)).map_err(|e| tell_later("Can't open the model", &e)).ok();
     }
     let path = paths.into_iter().next()?;
+    if !a_path(&path) {
+        return None;
+    }
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let extension = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     // a model's artwork opens from where it is unpacked, and is kept as any new artwork is
@@ -649,12 +736,12 @@ fn open_pdf(path: &Path, name: &str) -> Result<Arc<CanvasSession>, String> {
 /// The model in file `path` to paint on, with the other files `picked` along with it; its own
 /// textures in its texture sets.
 fn open_model(path: &Path, picked: &[PathBuf]) -> Result<Arc<CanvasSession>, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = read_path(path).map_err(|e| e.to_string())?;
     let file_name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let files = picked
         .iter()
         .filter(|p| p.as_path() != path)
-        .filter_map(|p| std::fs::read(p).ok().map(|bytes| ModelFile { name: file_name(p), bytes }))
+        .filter_map(|p| read_path(p).ok().map(|bytes| ModelFile { name: file_name(p), bytes }))
         .collect();
     let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).filter(|n| !n.trim().is_empty());
     let name = name.unwrap_or_else(|| "Untitled Artwork".to_owned());
@@ -707,8 +794,8 @@ pub fn png_rgba(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
 
 /// A PNG's pixels, straight RGBA.
 pub fn read_png(path: &Path) -> Result<ThumbnailImage, String> {
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
+    let bytes = read_path(path).map_err(|e| e.to_string())?;
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8() | png::Transformations::ALPHA);
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
     let mut buf = vec![0; reader.output_buffer_size().ok_or("too large")?];
@@ -744,7 +831,11 @@ pub fn save(session: &Arc<CanvasSession>, ui: &mut Interface, ask: bool) {
             let Some(p) = picked.into_iter().next() else {
                 return;
             };
-            with_extension(p, "procraft")
+            let p = with_extension(p, "procraft");
+            if !a_place(&p) {
+                return;
+            }
+            p
         }
     };
     let edits = session.edits();
@@ -774,6 +865,9 @@ pub fn export(
         let title =
             if format == Format::ModelTextures { "Share textures as PNG files" } else { "Share layers as PNG files" };
         let Some(dir) = crate::platform::pick(crate::platform::Picked::default().title(title).folders()).into_iter().next() else { return };
+        if !a_place(&dir) {
+            return;
+        }
         let dir = dir.to_string_lossy().into_owned();
         writing(session, card, "Can't share", move |session| {
             match format {
@@ -796,6 +890,9 @@ pub fn export(
         return;
     };
     let path = with_extension(path, format.extension());
+    if !a_place(&path) {
+        return;
+    }
     let artwork = dir.map(str::to_owned);
     let time_lapse = dir.map(crate::timelapse::for_package);
     writing(session, card, "Can't export", move |session| {
@@ -897,13 +994,20 @@ pub fn share_artworks(
         let Some(path) = picked.into_iter().next() else {
             return;
         };
-        vec![(one.clone(), with_extension(path, extension))]
+        let path = with_extension(path, extension);
+        if !a_place(&path) {
+            return;
+        }
+        vec![(one.clone(), path)]
     } else {
         let Some(dir) =
             crate::platform::pick(crate::platform::Picked::default().title(format!("Share as {}", format.name())).folders()).into_iter().next()
         else {
             return;
         };
+        if !a_place(&dir) {
+            return;
+        }
         let mut used = std::collections::HashSet::new();
         list.iter()
             .map(|a| {
@@ -1035,6 +1139,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_env = "ohos"))]
     fn a_message_has_other_ways_of_showing_with_its_words_in_each() {
         let ways = other_dialogs("No drawing", "no GPU");
         assert_eq!(ways.map(|(program, _)| program), ["kdialog", "xmessage", "notify-send"]);
