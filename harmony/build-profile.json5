@@ -4,7 +4,11 @@
     "products": [
       {
         "name": "default",
-        "compatibleSdkVersion": "5.0.0(12)",
+        // The lowest API the port can run on: it asks the runtime for the app's own files folder
+        // through OH_AbilityRuntime_ApplicationContextGetFilesDir, which arrived in API 16. Declaring
+        // 12 here would promise a build that cannot find its own files on the devices that gave it
+        // 12, so the manifest says what is true.
+        "compatibleSdkVersion": "5.0.4(16)",
         "targetSdkVersion": "6.0.0(20)",
         "runtimeOS": "HarmonyOS"
       }
