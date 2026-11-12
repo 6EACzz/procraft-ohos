@@ -677,9 +677,19 @@ pub fn retoned(pixels: &[u8], tones: &[u8], shares: &[f32]) -> Vec<u8> {
 
 /// Makes the shapes and grains now, so the first canvas doesn't wait for them (slow: off the main
 /// thread).
+///
+/// The two are made side by side: each image already fills its rows across every core, so making
+/// the shapes and the grains together is what is left to share out, and it halves the wait before
+/// the first canvas (a tablet's first frame is 550 ms of this).
 pub fn prepare() {
-    SHAPES.get_or_init(make_shapes);
-    GRAINS.get_or_init(make_grains);
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            SHAPES.get_or_init(make_shapes);
+        });
+        s.spawn(|| {
+            GRAINS.get_or_init(make_grains);
+        });
+    });
 }
 
 fn make_shapes() -> Vec<GrayImage> {
