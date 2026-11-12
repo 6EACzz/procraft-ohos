@@ -358,10 +358,12 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
     // the log, to the app's own folder (and the system's, for a device with no console)
     init_log();
     // (whether the system's own fonts can be read here at all: the app draws every script from
-    // them, and an app's sandbox may not be let near `/system`)
+    // them, and an app's sandbox may not be let near `/system`). Their size is asked for rather
+    // than their bytes read: reading them here was forty megabytes of work thrown away, and the
+    // fonts are read for their content a moment later anyway.
     for font in ["/system/fonts/HarmonyOS_Sans_SC.ttf", "/system/fonts/NotoSansCJK-Regular.ttc", "/system/fonts/HarmonyOS_Sans.ttf"] {
-        match std::fs::read(font) {
-            Ok(bytes) => log::warn!("font {font}: readable ({} bytes)", bytes.len()),
+        match std::fs::metadata(font) {
+            Ok(about) => log::warn!("font {font}: readable ({} bytes)", about.len()),
             Err(e) => log::warn!("font {font}: {e}"),
         }
     }
@@ -985,6 +987,22 @@ pub unsafe extern "C" fn procraft_dropped_file(bytes: *const u8, length: usize) 
     if let Ok(path) = std::str::from_utf8(slice) {
         tell(Said::Dropped(path.to_owned()));
     }
+}
+
+/// Tells the app how to wake the shell's page when it queues an ask (or, with nought, that the
+/// shell is going away and is no longer to be woken). The page used to ask [`procraft_asks_waiting`]
+/// every sixteenth of a millisecond-odd tick of its own timer, which cost it more of a core than
+/// the whole app spends while it idles; it is told instead.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_set_ask_wake(wake: Option<extern "C" fn()>) {
+    crate::ohos_platform::set_ask_wake(wake);
+}
+
+/// Whether there is anything for [`procraft_asks`] to give: the shell asks this every frame, and
+/// the answer usually is "nothing", so it is answered without the lock `procraft_asks` takes.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_asks_waiting() -> bool {
+    crate::ohos_platform::waiting()
 }
 
 /// What the interface asked the shell for, waiting to be taken (`ohos_platform`): a file picked,

@@ -80,11 +80,36 @@ struct Index {
     // the app's own files go in this app's sandbox, which only this side can name: told as early
     // as it can be (a save may come before the surface does)
     this.tellOwnFolder();
+
     // the panel's refresh, so that the app draws at the rate the screen can show, and so that the
     // surface asks the system for it (a panel nothing asks of settles at 60 Hz, whatever it can do)
     this.tellFrameRate();
-    // the app's asks are taken as they come (it runs on its own thread, drawing by itself)
-    this.pumpTimer = setInterval(() => this.pump(), 16);
+    // the app's asks are taken as they come (it runs on its own thread, drawing by itself), and it
+    // says when one is waiting rather than being asked over and over: a timer short enough for a
+    // tap's dialog to be answered at once cost a few percent of a core to do nothing at all
+    try {
+      procraft.setAskWake(() => this.pump());
+    } catch (error) {
+      // an older app, which has nothing to say until it is asked: the timer below is the fallback
+      hilog.warn(0x3200, TAG, 'the wake: %{public}s', this.why(error));
+      this.pumpTimer = setInterval(() => this.pump(), 16);
+    }
+    // a slow tick as well, for what the app writes where it was told to: copying a saved artwork
+    // out of the sandbox is not an ask, and nothing tells the page that a file has appeared
+    this.outboxTimer = setInterval(() => this.drainOutboxQuietly(), 250);
+  }
+
+  // What the app wrote out, copied to where the user asked for it, without a word when it fails to
+  // be copied and nothing is waiting: the pump above does the same when there is.
+  private drainOutboxQuietly(): void {
+    if (this.outboxFiles.size === 0 && this.outboxDirs.size === 0) {
+      return;
+    }
+    try {
+      this.drainOutbox();
+    } catch (error) {
+      hilog.warn(0x3200, TAG, 'out: %{public}s', this.why(error));
+    }
   }
 
   // The panel's refresh rate, and what the surface asks the system for. The display's own
@@ -121,6 +146,16 @@ struct Index {
     if (this.pumpTimer >= 0) {
       clearInterval(this.pumpTimer);
       this.pumpTimer = -1;
+    }
+    if (this.outboxTimer >= 0) {
+      clearInterval(this.outboxTimer);
+      this.outboxTimer = -1;
+    }
+    // the app is not to be told about a page that is going: it is told nought, and stops calling
+    try {
+      procraft.setAskWake(undefined);
+    } catch (error) {
+      hilog.warn(0x3200, TAG, 'the wake: %{public}s', this.why(error));
     }
     // nothing is left unanswered: the app waits on every ask it made, and this page is the only
     // one that could answer them (an unanswered ask holds the app up until its own timeout)
@@ -717,18 +752,16 @@ struct Index {
   }
 
   @State private typed: string = '';
-  // The timer that takes the app's asks.
+  // The timer that takes the app's asks, where the app could not be told to say.
   private pumpTimer: number = -1;
+  // The timer that copies what the app saved out to where the user asked for it.
+  private outboxTimer: number = -1;
 
-  // The asks the app made, taken and answered each frame.
+  // The asks the app made, taken and answered as they come.
   private pump(): void {
     // what the app wrote where it was told to is copied out to where the user asked: it saves a
     // path of this page's own making and never touches the user's folder itself
-    try {
-      this.drainOutbox();
-    } catch (error) {
-      hilog.warn(0x3200, TAG, 'out: %{public}s', this.why(error));
-    }
+    this.drainOutboxQuietly();
     const text = procraft.asks();
     if (text === undefined || text === null || text.length === 0 || text === '[]') {
       return;

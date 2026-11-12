@@ -37,6 +37,28 @@ uint32_t g_height = 0;
 // it is put right by the `procraft_scale` that `setScale` sends, once the app is up).
 float g_scale = 2.0f;
 
+// How the app tells the page that it has something for it to take (`procraft_set_ask_wake`): a
+// thread-safe function made from the page's own callback, which may be called from the app's
+// thread. It exists so the page does not have to keep asking sixty times a second — that poll cost
+// it a few percent of a core while the app sat idle and had nothing to say.
+napi_threadsafe_function g_ask_wake = nullptr;
+// The page's callback, kept so the thread-safe function has something to call.
+napi_ref g_ask_callback = nullptr;
+
+void CallAskWake(napi_env env, napi_value callback, void* context, void* data) {
+    if (env == nullptr || callback == nullptr) return;
+    napi_value nothing = nullptr;
+    napi_get_undefined(env, &nothing);
+    napi_call_function(env, nothing, callback, 0, nullptr, nullptr);
+}
+
+// The app's own thread, through `procraft_set_ask_wake`: the threadsafe function may be called
+// from any thread, and does the call on the page's own.
+void TellThePage() {
+    if (g_ask_wake == nullptr) return;
+    napi_call_threadsafe_function(g_ask_wake, nullptr, napi_tsfn_nonblocking);
+}
+
 // The page's own measurement of the surface, in pixels (what `resized` was last given by
 // `onAreaChange`). The component's size is documented in vp, so it is not the same number; once
 // the page has said, what it said is the surface's real size and the component's own report must
@@ -328,6 +350,49 @@ napi_value Resized(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
+// Tells the app how to tell the page that something is waiting for it (`asks`), so the page need
+// not ask over and over. Called once with the page's callback; called again it replaces it.
+napi_value SetAskWake(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value argv[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+    napi_valuetype kind = napi_undefined;
+    if (argc >= 1 && napi_typeof(env, argv[0], &kind) == napi_ok && kind == napi_function) {
+        // the page that is here now
+    } else {
+        // no function: the page is going, and the app is not to call back into it
+        if (g_ask_wake != nullptr) {
+            napi_release_threadsafe_function(g_ask_wake, napi_tsfn_release);
+            g_ask_wake = nullptr;
+        }
+        procraft_set_ask_wake(nullptr);
+        return nullptr;
+    }
+    if (g_ask_wake != nullptr) {
+        napi_release_threadsafe_function(g_ask_wake, napi_tsfn_release);
+        g_ask_wake = nullptr;
+    }
+    napi_value name = nullptr;
+    napi_create_string_utf8(env, "procraft asks", NAPI_AUTO_LENGTH, &name);
+    if (napi_create_threadsafe_function(env, argv[0], nullptr, name, 0, 1, nullptr, nullptr, nullptr,
+                                        CallAskWake, &g_ask_wake) != napi_ok) {
+        OH_LOG_WARN(LOG_APP, "setAskWake: no thread-safe function");
+        g_ask_wake = nullptr;
+        return nullptr;
+    }
+    napi_unref_threadsafe_function(env, g_ask_wake);
+    procraft_set_ask_wake(TellThePage);
+    return nullptr;
+}
+
+// Whether `asks` has anything to give. The page asks this before each take: it is asked once a
+// frame for as long as the app runs, and answering "no" must not cost a lock and a string.
+napi_value AsksWaiting(napi_env env, napi_callback_info info) {
+    napi_value result = nullptr;
+    napi_get_boolean(env, procraft_asks_waiting(), &result);
+    return result;
+}
+
 // What the app asked the shell for, since the last call: an array of `{id, kind, details}`, each
 // answered by `answer(id, paths, clipboard, done)`. The shell calls this each frame.
 napi_value Asks(napi_env env, napi_callback_info info) {
@@ -442,6 +507,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"droppedFile", nullptr, DroppedFile, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"wake", nullptr, Wake, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"asks", nullptr, Asks, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setAskWake", nullptr, SetAskWake, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"asksWaiting", nullptr, AsksWaiting, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"answer", nullptr, Answer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"canGoBack", nullptr, CanGoBack, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

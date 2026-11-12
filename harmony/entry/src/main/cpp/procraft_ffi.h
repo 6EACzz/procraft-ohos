@@ -73,6 +73,17 @@ void procraft_dropped_file(const uint8_t* bytes, size_t length);
 const char* procraft_asks();
 void procraft_asks_free(const char* text);
 
+// Whether there is anything for `procraft_asks` to give. Answered without the lock the take
+// needs, because the shell asks once a frame and the answer is nearly always no.
+bool procraft_asks_waiting();
+
+// How the app is to tell the shell. It is called from the app's own thread the moment an ask is
+// queued (the shell passing nought means it is going away and is not to be called again), which
+// is what lets the shell stop asking: the callback must be safe to call from a thread of the
+// app's own making, and the shell's side of it is a threadsafe function that does the call on the
+// page's thread.
+void procraft_set_ask_wake(void (*wake)());
+
 // The shell's answer to one ask: the paths picked (one a line), the clipboard's contents, and
 // whether the shell could do it at all. Either pointer may be null for none.
 void procraft_answer(uint64_t id, const char* paths, const char* clipboard, bool done);

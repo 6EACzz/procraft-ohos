@@ -11,6 +11,11 @@ export const text: (text: string) => void;
 export const droppedFile: (path: string) => void;
 export const wake: () => void;
 export const asks: () => string;
+// How the app tells the page it has something to take: given the page's own callback, called from
+// the app's thread whenever something is queued.
+export const setAskWake: (wake?: () => void) => void;
+// Whether `asks` has anything to give, answered without doing the work `asks` does.
+export const asksWaiting: () => boolean;
 export const answer: (id: number, paths: string, clipboard: string, done: boolean) => void;
 // Whether the app has something of its own to close first: BACK closes that instead of the app.
 export const canGoBack: () => boolean;

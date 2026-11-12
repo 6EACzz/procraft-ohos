@@ -8,6 +8,7 @@
 //! drawing until it comes, and goes on without it if the shell says no.
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use crate::platform::{Clipboard, Picked, PickedPaths};
@@ -70,6 +71,14 @@ static QUEUE: Mutex<Vec<Queued>> = Mutex::new(Vec::new());
 static TAKEN: Mutex<Vec<Queued>> = Mutex::new(Vec::new());
 /// The next ask's id.
 static NEXT: Mutex<u64> = Mutex::new(1);
+/// Whether [`QUEUE`] has anything in it, readable without taking its lock: the shell asks this
+/// every frame or so for its whole life, and a lock taken for a "no" that often costs more than
+/// the answer is worth.
+static WAITING: AtomicBool = AtomicBool::new(false);
+/// How to tell the shell that something was queued ([`set_ask_wake`]): none while no shell has
+/// said. The shell used to poll [`QUEUE`] sixty times a second for this, which cost it a few
+/// percent of a core doing nothing at all.
+static ASK_WAKE: Mutex<Option<extern "C" fn()>> = Mutex::new(None);
 
 /// How long an ask waits for its answer. One a person answers — a pick, a folder's files read — is
 /// waited on for as long as a person may take; the rest the shell answers at once or not at all,
@@ -112,6 +121,10 @@ fn ask(wanted: Wanted) -> Option<Answered> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .push(Queued { id, wanted, answer: done, waited_until: Some(waited_until) });
+    WAITING.store(true, Ordering::Relaxed);
+    // outside the lock: the shell takes it as soon as it is told, and this thread is not the one
+    // that takes it
+    wake_the_shell();
     // (the app's own loop wakes the shell: see `ohos_main`'s asks)
     let answered = wait(answer, waited, what);
     // answered or not, nothing waits for this one any more: a shell that never answers must not
@@ -138,6 +151,8 @@ fn ask_unwaited(wanted: Wanted) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .push(Queued { id, wanted, answer: done, waited_until: None });
+    WAITING.store(true, Ordering::Relaxed);
+    wake_the_shell();
 }
 
 /// Whether an ask's asker has gone on without its answer: true once its own wait is over, whether
@@ -165,13 +180,37 @@ fn forget(id: u64) {
     TAKEN.lock().unwrap_or_else(|e| e.into_inner()).retain(|queued| queued.id != id);
 }
 
+/// Tells [`QUEUE`]'s askers that the shell is ready to be told, or (nought) that it is gone.
+pub fn set_ask_wake(wake: Option<extern "C" fn()>) {
+    *ASK_WAKE.lock().unwrap_or_else(|e| e.into_inner()) = wake;
+}
+
+/// Tells the shell that there is something to take: it asked to be told rather than to keep asking.
+fn wake_the_shell() {
+    // copied out first: the call is the shell's, and it may take this lock itself on its own thread
+    let wake = *ASK_WAKE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(wake) = wake {
+        wake();
+    }
+}
+
+/// Whether there is anything for the shell to take, answered without taking [`QUEUE`]'s lock: the
+/// shell asks this far more often than there is anything to take, and the lock and the string it
+/// would otherwise build cost more per frame than the whole rest of the poll.
+pub fn waiting() -> bool {
+    WAITING.load(Ordering::Relaxed)
+}
+
 /// Takes what the shell is to do now (the shell's own thread, each frame): each with its id, and
 /// the shape the shell reads (`kind` and `json`).
 pub fn take() -> Vec<(u64, String, String)> {
     // what is queued moves to what is waiting for an answer
     let queued: Vec<Queued> = {
         let mut queue = QUEUE.lock().unwrap_or_else(|e| e.into_inner());
-        std::mem::take(&mut *queue)
+        let queued = std::mem::take(&mut *queue);
+        // cleared before the lock is let go, so an ask made after this is seen by the next take
+        WAITING.store(false, Ordering::Relaxed);
+        queued
     };
     let mut taken: Vec<(u64, String, String)> = Vec::with_capacity(queued.len());
     let mut waiting: Vec<Queued> = Vec::with_capacity(queued.len());
