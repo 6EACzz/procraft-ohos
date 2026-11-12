@@ -99,8 +99,21 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
     `picker.DocumentViewPicker.select()/save()` 返回 `file://docs/...`，直接当路径 `std::fs::read`
     会 ENOENT，而当路径写文件会真的在沙箱里建一个名叫 `file:` 的文件。
     约定是：Rust 只认路径；ArkTS 侧把选中的 URI `fs.copyFileSync` 到沙箱 `picked/`，
-    保存则先给一个沙箱 `outbox/` 路径、由 16 ms 的 pump 在文件写完（`.part` 改名之后）再拷回去。
+    保存则先给一个沙箱 `outbox/` 路径、由 250 ms 的 outbox 定时器在文件写完（`.part` 改名之后）再拷回去。
     文件夹选择同理（`DocumentSelectMode.FOLDER`，回写时逐个 `listFileSync` 拷贝）。
+
+16. **提问是应用"推"给 shell 的，不是 shell 轮询。**
+    起初 ArkTS 用 `setInterval(pump, 16)` 每帧问一次 `procraft.asks()`，实测空闲时就吃掉
+    4.9% 的一个核——问了一辈子"没有"。现在 Rust 在入队时置一个 `AtomicBool` 并通过
+    `procraft_set_ask_wake` 注册进来的回调唤醒页面（`napi_create_threadsafe_function`，
+    跨线程安全），页面不再轮询；空闲降到 **0.2–0.45%**。
+    `outbox/` 的拷贝仍用 250 ms 定时器，因为"沙箱里多了个文件"不是提问，没人会通知页面。
+
+17. **`compatibleSdkVersion` 要写真实的最低 API。**
+    应用靠 `OH_AbilityRuntime_ApplicationContextGetFilesDir`（API 16 起）找自己的目录，
+    声明成 API 12 就是在承诺一个跑起来找不到自己文件的包。写成 `5.0.4(16)`——
+    平台号与 API 号必须成对（hvigor 用 `hos-config.json` 的 `osVersionMapper` 校验，
+    16 对应 `5.0.4`，不是 `5.0.1`），打包出来的 `minAPIVersion` 也就从 50000012 变成 50004016。
 
 ---
 
@@ -155,7 +168,12 @@ cd harmony
 - 全屏沉浸、隐藏系统栏、保持常亮
 - **中文界面**：图库、Actions 面板六个分页、设置页（含分组标题）、关于页、警告框、笔刷库全部中文；
   设置 → 语言 可中英切换，整页即时重绘，选择写进 prefs 重启后保持
-- 空闲 CPU 0–3.7%（曾因每帧推 `ModifiersChanged` 跑到 55%）
+- **调整菜单 / 快捷菜单 / 手势说明** 全部中文（这些文字由 `crates/core` 的数据表给出，
+  最初扫描只扫了 `desktop/src`，所以漏了 110 条；现在都在表里，排版层自动翻译，调用点一处未改）
+- 空闲 CPU **0.2–0.45%**（曾因每帧推 `ModifiersChanged` 跑到 55%，又因 16 ms 轮询提问占 4.9%）
+- **返回键**逐层退出：先收面板，再退出画布，最后退图库的栈（对应 Android 版的 `BackHandler`）
+- **软键盘**在点画布标题、图层重命名等文本框时拉起，输入法组字正常
+- **导出**保存到用户目录后可被系统选择器看到（`Untitled Artwork.png`，48 KB）
 
 ---
 
@@ -170,3 +188,8 @@ cd harmony
 - 软键盘由 ArkTS 侧隐藏的 `TextInput` 承接焦点，输入法组字（CJK）经 `onDidInsert`/`onDidDelete`
   逐字送到应用；第三方输入法的候选词行为依赖系统，未在多种输入法上逐一验证。
 - 手写笔的真实压感、倾斜已从 `OH_NativeXComponent` 取到并传入笔刷引擎，但尚未在真机手写笔上做压感曲线标定。
+- 剪贴板**写图片**的链路（Rust 写 PNG → ArkTS 转 `PixelMap` → `pasteboard`）已经实现并有编译保证，
+  但上游界面本身没有任何地方会发出"复制图片"命令（`egui::OutputCommand::CopyImage` 在 `desktop/` 与
+  `crates/` 里只有消费者，没有生产者），所以在界面上点不到它。这是上游行为，不是移植缺失。
+- 启动时笔刷形状与颗粒要生成 91 张 256×256 图（约 5.8 MB 像素），已按行分带并行到 8 个核，
+  实测 434–674 ms，是首帧之外最大的一笔启动开销；管线建立（3.6–4.4 s）在首帧之后后台进行，不挡界面。
