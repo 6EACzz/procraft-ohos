@@ -1,0 +1,6 @@
+There's no room left to save this artwork.	没有剩余空间保存这个作品了。
+This artwork couldn't be saved.	这个作品保存失败了。
+Blank	空白
+Recording	录制
+Untitled Brush	未命名笔刷
+Untitled Set	未命名笔刷组
