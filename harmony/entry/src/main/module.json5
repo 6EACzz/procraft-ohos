@@ -12,6 +12,12 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // No permission is asked for here, on purpose. Reading the clipboard (`pasteboard.getData`)
+    // wants `ohos.permission.READ_PASTEBOARD`, and that is a restricted permission: an ordinary
+    // app cannot declare it at all, only receive it through an ACL in the signing profile. Until a
+    // profile grants it, Pasting from the system's clipboard stays unread ("nothing" is answered,
+    // and the paste is refused rather than the app stopping). Writing to the clipboard needs no
+    // permission and works.
     "abilities": [
       {
         "name": "EntryAbility",

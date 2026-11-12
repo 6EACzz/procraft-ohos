@@ -10,10 +10,9 @@
 # The release is tagged `harmony-v<version>-alpha` rather than `v<version>`: release.yml owns `v*`
 # and would read a tablet tag as an order for the Android, Windows, Linux and Mac apps.
 #
-# The HAP is unsigned, so `hdc install` refuses it until it is signed with a profile of one's own.
-# A profile is bound to a bundle name, and the one this port was built under is
-# `io.github.otd.harmonyTest`: change `bundleName` in harmony/AppScope/app.json5 to the name the
-# profile was made for, then sign the HAP with it.
+# The HAP carries no signature of its own: signing it is the step the installer does, with a
+# profile of one's own, and a profile is bound to a bundle name. The app calls itself
+# `io.github.artcraftandroid.procraft` in harmony/AppScope/app.json5, as the Android app does.
 name: HarmonyOS alpha
 
 on:
@@ -196,17 +195,15 @@ jobs:
           cat >"$RUNNER_TEMP/notes.md" <<'EOF'
           ProCraft on HarmonyOS, built from this commit.
 
-          **This HAP is unsigned.** `hdc install` refuses it until it is signed with a profile of
-          your own, and a profile is bound to a bundle name: change `bundleName` in
-          `harmony/AppScope/app.json5` to the name your profile was made for, then sign the HAP
-          with it.
-
           What it needs: HarmonyOS 6 or later on a 64-bit ARM tablet, API 16 or later (the app finds
           its own files through `OH_AbilityRuntime_ApplicationContextGetFilesDir`, which arrived in
           16). It draws through OpenGL ES 3.2, so it runs on a device whose Vulkan the port cannot
           reach — which, on HarmonyOS, is most of them.
 
           The interface is in English or Chinese, switched in Help › Advanced settings › Language.
+
+          It carries no signature, as a build from source does not: sign it with a profile of your
+          own before installing it.
           EOF
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$HAP" "$RUNNER_TEMP/SHA256SUMS" --clobber

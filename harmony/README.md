@@ -180,7 +180,7 @@ cd harmony
 
 ## 已知限制
 
-- 打包用的签名 profile 绑定 `io.github.otd.harmonyTest`，因此 `AppScope/app.json5` 里暂时用这个 bundle 名；换成自己的调试证书后改回 `io.github.artcraftandroid.procraft` 即可。
+- 打包用的签名 profile 绑定自己的 bundle 名，而 `AppScope/app.json5` 里用的是应用本身的 `io.github.artcraftandroid.procraft`；本地签名时把这个名字改成 profile 里的那一个即可，提交时不要带上改过的名字。
 - 文件选择/剪贴板经 ArkTS shell 往返，首次拉起系统选择器有系统本身的延迟。
 - 剪贴板**读**需要 `ohos.permission.READ_PASTEBOARD`，该权限是 `system_basic`，
   必须在签名 profile 里加 ACL 才授予；只改 `module.json5` 不会生效。目前读剪贴板会被
