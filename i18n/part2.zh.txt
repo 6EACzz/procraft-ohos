@@ -1,0 +1,387 @@
+Studio quality	工作室质量
+Lossless	无损
+HEVC	HEVC
+Background color	背景颜色
+Background hidden	隐藏背景
+Backspace	退格
+Next	下一步
+Done	完成
+export card	export card
+Exporting	正在导出
+files opened from the Finder aren't taken: the app has no delegate	files opened from the Finder aren't taken: the app has no delegate
+C-unwind	C-unwind
+files opened from the Finder aren't taken: the app's delegate takes them itself	files opened from the Finder aren't taken: the app's delegate takes them itself
+{} file(s) opened from the Finder	{} file(s) opened from the Finder
+keeping the presets: {e}	keeping the presets: {e}
+Tap + to start a new canvas	轻点 + 新建画布
+Delete 1 artwork?	删除 1 个作品？
+Delete {n} artworks?	删除 {n} 个作品？
+This can't be undone.	此操作无法撤销。
+Stack	堆叠
+More	更多
+select done	select done
+more options	more options
+More Options	更多选项
+renamed artwork	renamed artwork
+rename artwork	rename artwork
+app mark	app mark
+Version 	版本 
+Start Gallery Recovery	开始恢复图库
+about recovery	about recovery
+about close	about close
+gallery spread	gallery spread
+preview close	preview close
+preview arrow	preview arrow
+Select	选择
+new canvas	new canvas
+gallery grid	gallery grid
+gallery cell	gallery cell
+swipe open	swipe open
+stack left	stack left
+lifted artwork	lifted artwork
+Delete \u{201c}{}\u{201d}?	删除\u{201c}{}\u{201d}？
+share formats	share formats
+Image Format	图像格式
+thumbnail {dir}	thumbnail {dir}
+select marks	select marks
+{} artworks	{} 个作品
+New canvas	新建画布
+Screen Size	屏幕尺寸
+screen size	screen size
+Edit	编辑
+played {i}	played {i}
+gesture controls	gesture controls
+gesture page	gesture page
+Reset to defaults	恢复默认设置
+Reset gesture controls?	重置手势控制？
+Every gesture goes back to how the app starts out.	所有手势将恢复为应用初始状态。
+gesture switch	gesture switch
+Delay	延迟
+{seconds:.2}s	{seconds:.2} 秒
+gesture delay	gesture delay
+gradient map	gradient map
+Gradient Map	渐变映射
+Gradient Library	渐变库
+gradient done	gradient done
+new gradient	new gradient
+gradient cards	gradient cards
+gradient bar	gradient bar
+gradient menu	gradient menu
+2D Grid	2D 网格
+Isometric	等距
+Symmetry	对称
+guide size keypad	guide size keypad
+Length	长度
+guide canvas	guide canvas
+guide top	guide top
+Drawing Guides	绘图指引
+colour bar	colour bar
+Tap to create vanishing points	轻点以创建消失点
+guide toolbar	guide toolbar
+Thickness	粗细
+Grid size	网格大小
+Options	选项
+guide options	guide options
+Assisted Drawing	绘图辅助
+Guide Options	指引选项
+Vertical	垂直
+Horizontal	水平
+Quadrant	四象限
+Radial	径向
+Rotational Symmetry	旋转对称
+symmetry switch	symmetry switch
+grid size chip	grid size chip
+layer choice	layer choice
+Color	颜色
+Roughness	粗糙度
+Metallic	金属度
+A locked layer can’t be deleted. Unlock it first.	锁定的图层无法删除，请先解锁。
+blend editor	blend editor
+layers panel	layers panel
+layers frame	layers frame
+new layer	new layer
+layers list	layers list
+Locked layer selection	已锁定的图层
+Select All	全选
+Group	编组
+Merge	合并
+layers title menu	layers title menu
+Delete these layers?	删除这些图层？
+Undo brings them back.	撤销即可恢复。
+Those meshes aren't in the same texture set	这些网格不在同一纹理集内
+Unlock	解锁
+Lock	锁定
+mesh lock	mesh lock
+Unlock mesh	解锁网格
+Lock mesh	锁定网格
+mesh {index}	mesh {index}
+mesh box	mesh box
+Show Submesh	显示子网格
+Hide Submesh	隐藏子网格
+Replace Material Map Content	替换材质贴图内容
+This picture can't be opened.	无法打开此图片。
+channel {c} {}	channel {c} {}
+channel tile	channel tile
+\u{201c}{}\u{201d} is on every mesh of this texture set.	\u{201c}{}\u{201d} 位于此纹理集的每个网格上。
+Delete shared layer?	删除共享图层？
+layer options	layer options
+Text rasterized	文字已栅格化
+Assisted Reference	辅助参考
+Shared Reference	共享参考
+Shared	共享
+Assisted	辅助
+Private	私有
+layer {}	layer {}
+background visible	background visible
+background colour	background colour
+check on white	check on white
+check on grey	check on grey
+check off white	check off white
+check off grey	check off grey
+Darken	变暗
+Shade	压暗
+Lighten	变亮
+Subtract	减去
+Divide	划分
+brush library	brush library
+library frame	library frame
+Erase library	橡皮擦库
+Smudge library	涂抹库
+Brush library	笔刷库
+library search	library search
+library brushes	library brushes
+library sets	library sets
+Brush	笔刷
+delete picked	delete picked
+Combine	合并
+combine picked	combine picked
+Delete this set and its brushes?	删除此笔刷组及其笔刷？
+Delete this brush?	删除此笔刷？
+Delete these brushes?	删除这些笔刷？
+It can't be brought back.	此操作无法恢复。
+Create new brush	新建笔刷
+Create new set	新建笔刷组
+Import from Files	从文件导入
+library plus menu	library plus menu
+Import brushes	导入笔刷
+Rename	重命名
+Customize icon	自定义图标
+library set menu	library set menu
+set icon picker	set icon picker
+Brushes	笔刷
+Brush set	笔刷组
+library recent menu	library recent menu
+Recent	最近
+brush {key:?}	brush {key:?}
+brush previews	brush previews
+the brushes' sample strokes aren't drawn: {e}	the brushes' sample strokes aren't drawn: {e}
+Search	搜索
+clear search	clear search
+No results	无结果
+library results	library results
+set icons	set icons
+set icon	set icon
+Find	定位
+Unpin	取消固定
+Pin	固定
+The interface font is Inter, by The Inter Project Authors.\n\n	界面字体为 Inter，作者为 The Inter Project Authors。\n\n
+\n\nThe app keeps Lucide icons (lucide.dev), by Lucide Icons and Contributors.\n\n	\n\n应用内置 Lucide 图标（lucide.dev），作者为 Lucide Icons and Contributors。\n\n
+licences offsets	licences offsets
+licences scrim	licences scrim
+licences text	licences text
+Studio	工作室
+Coast	海岸
+Auditorium	礼堂
+City	城市
+Nightlife	夜生活
+Portside	港口
+Industrial	工业
+Sunrise	日出
+Beach	海滩
+Mountain	山景
+Daytime	日光
+lighting studio view	lighting studio view
+lighting studio bar	lighting studio bar
+Lighting Studio	光照工作室
+Add Light	添加灯光
+Environment	环境
+studio pill	studio pill
+A model can have four lights at most.	每个模型最多可有四盏灯。
+studio done	studio done
+studio environment	studio environment
+Show Environment	显示环境
+show environment	show environment
+light settings	light settings
+Light Settings	灯光设置
+Intensity	强度
+light slider	light slider
+light action	light action
+Min	最小
+Exposure	曝光
+Push	推
+Twirl Right	右旋
+Twirl Left	左旋
+Pinch	捏合
+Expand	膨胀
+Crystals	晶体
+Edge	边缘
+Reconstruct	重建
+Pressure	压力
+Distortion	扭曲
+Momentum	惯性
+liquify panel	liquify panel
+Adjust	调整
+liquify way	liquify way
+liquify kinds	liquify kinds
+Liquify Mode	液化模式
+liquify kind	liquify kind
+liquify adjust	liquify adjust
+Strength	强度
+liquify button	liquify button
+model picture	model picture
+Flip Horizontal	水平翻转
+Flip Vertical	垂直翻转
+Rotate 45\u{b0}	旋转 45\u{b0}
+model picture bar	model picture bar
+canvas overlays	canvas overlays
+Picking color from reference	正在从参考取色
+Picking color from canvas	正在从画布取色
+shape bar	shape bar
+Editing	编辑中
+shape kinds	shape kinds
+shape kind	shape kind
+Line	直线
+Polyline	折线
+Arc	弧线
+Ellipse	椭圆
+Circle	圆形
+Triangle	三角形
+Equilateral	等边三角形
+Quadrilateral	四边形
+Rectangle	矩形
+a line	直线
+a polyline	折线
+an arc	弧线
+an ellipse	椭圆
+a circle	圆形
+a triangle	三角形
+an equilateral triangle	等边三角形
+a quadrilateral	四边形
+a rectangle	矩形
+a square	正方形
+Snapped to {what}	已吸附为{what}
+side bar place	side bar place
+Opening a PDF needs pdftoppm: install poppler-utils from your system's packages.	打开 PDF 需要 pdftoppm：请从系统软件包中安装 poppler-utils。
+Page	Page
+page-{}.png	page-{}.png
+not a file's path	不是文件路径
+not a PDF	不是 PDF
+the PDF is locked with a password	PDF 已被密码锁定
+a page is missing	缺少页面
+page-{n}.png	page-{n}.png
+no sRGB colour space	没有 sRGB 色彩空间
+no bitmap to draw the page into	没有可用于绘制页面的位图
+the page's pixels came out short	页面的像素数据不完整
+Pages:	Pages:
+no pages	没有页面
+drawn-{n}	drawn-{n}
+light_interface {}	light_interface {}
+selection_x_ray {}	selection_x_ray {}
+right_handed {}	right_handed {}
+brush_on_screen {}	brush_on_screen {}
+brush_cursor {}	brush_cursor {}
+cursor_shows {}	cursor_shows {}
+cursor_style {}	cursor_style {}
+colour_model {}	colour_model {}
+rapid_undo_delay {}	rapid_undo_delay {}
+selection_visibility {}	selection_visibility {}
+stabilization {}	stabilization {}
+motion_filtering {}	motion_filtering {}
+motion_expression {}	motion_expression {}
+pressure_smoothing {}	pressure_smoothing {}
+tip_attached {}	tip_attached {}
+curve {}	curve {}
+actions_tab {}	actions_tab {}
+pad_3d {}	pad_3d {}
+project_canvas {}	project_canvas {}
+orientation_memory {}	orientation_memory {}
+fit_inside {}	fit_inside {}
+no_time_lapse {}	no_time_lapse {}
+simplified_undos {}	simplified_undos {}
+speed_distance {}	speed_distance {}
+color_names {}	color_names {}
+single_touch_companion {}	single_touch_companion {}
+tap_assistance {}	tap_assistance {}
+feedback_sounds {}	feedback_sounds {}
+color_history_shown {}	color_history_shown {}
+drag_format {}	drag_format {}
+drag_image_format {}	drag_image_format {}
+recolor_threshold {}	recolor_threshold {}
+quick menu	quick menu
+quick title	quick title
+quick button	quick button
+Set Action	设置操作
+Brush Set	笔刷组
+quick picker	quick picker
+picker back	picker back
+quick picker list	quick picker list
+quick menus	quick menus
+QuickMenu	快捷菜单
+quick menus list	quick menus list
+recolor reticle	recolor reticle
+reference picture glass	reference picture glass
+reference picture	reference picture
+reference canvas crisp	reference canvas crisp
+reference canvas	reference canvas
+reference canvas glass	reference canvas glass
+Import Image	导入图像
+Can't import it	无法导入
+reference bars	reference bars
+import image	import image
+top bar	top bar
+bottom bar	bottom bar
+Image	图像
+Automatic	自动
+Freehand	手绘
+Invert	反选
+Feather	羽化
+Save & Load	存储与载入
+Color Fill	颜色填充
+X-Ray	X 光
+selection toolbar	selection toolbar
+saved selection {i}	saved selection {i}
+selection popover	selection popover
+Selections	选区
+save selection	save selection
+Selection {}	选区 {}
+saved selection	saved selection
+selection overlay	selection overlay
+Selection Threshold {:.1}%	选区阈值 {:.1}%
+Canvas Orientation Memory	画布方向记忆
+An artwork opens zoomed and turned as it was left.	作品会以上次离开时的缩放和旋转状态打开。
+Fit Canvas Inside Interface	画布适应界面
+A fitted canvas keeps clear of the top bar and the sidebar.	适应后的画布会避开顶栏与侧栏。
+Disable Time-lapse	关闭延时视频
+New artworks don't record their time-lapse.	新建作品不会录制延时视频。
+Simplified Undos	简化撤销
+Strokes made in an adjustment undo together once it is left.	在调整中画出的笔触会在退出调整时一并撤销。
+Maximum Speed Distance	最大速度距离
+How far the pen moves before a brush's speed dynamics count it as fast.	笔移动多远之后，笔刷的速度动态才算作快速。
+Drag and Drop export	拖放导出
+Preferred file format	首选文件格式
+Preferred image format	首选图像格式
+Accessibility	辅助功能
+Single Touch Gestures Companion	单指手势辅助条
+A floating bar of undo, redo, zoom, move and fit for one finger.	用一根手指即可撤销、重做、缩放、移动和适应画布的浮动栏。
+Color Description Notifications	颜色名称提示
+A message names the colour once it stops changing.	颜色停止变化后会提示其名称。
+Feedback Sounds	操作音效
+Undo, redo, tools and panels click as they are used.	使用撤销、重做、工具和面板时会发出点击音。
+Tap Assistance - Initial Touch Location Support	轻点辅助 - 初始触点位置支持
+A tap lands where the finger first touched, even if it drifts before lifting.	轻点会落在手指最初接触的位置，即使抬起前有所偏移。
+advanced settings	advanced settings
+Licenses	许可
+settings choice menu	settings choice menu
+settings row	settings row
+speed distance	speed distance
+settings choice open	settings choice open

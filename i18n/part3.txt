@@ -1,0 +1,391 @@
+shortcuts scrim
+shortcuts list
+RIFF
+WAVEfmt 
+Import a photo
+Import a file
+Source Library
+source editor
+Shape Editor
+Grain Editor
+Metallic Editor
+Roughness Editor
+Auto repeat
+Grain scale
+Rotate
+Border overlap
+Maximal
+Mask hardness
+Soft
+Hard
+Mirror overlap
+Pyramid blending
+repeat switch
+Image source options
+import menu
+source import
+library veil
+library cancel
+Shape Source
+Grain Source
+library tab
+source library
+library cell
+repeat slider
+Search Library
+source library search
+Can't paste
+There's no picture to paste.
+No filtering
+Classic filtering
+Improved filtering
+Stroke path
+Taper
+Shape
+Grain
+Rendering
+Dynamics
+Stylus
+Properties
+Stroke properties
+Spacing
+Spacing Jitter
+Jitter Lateral
+Jitter Linear
+StreamLine
+Motion filtering
+Expression
+Pressure taper
+Tip
+Tip animation
+Touch taper
+Taper properties
+Classic taper
+Input style
+Touch only
+Azimuth
+Azimuth and barrel roll
+Relative to stroke
+Touch properties
+Shape properties
+Scatter
+Count
+Count jitter
+Randomized
+Flip X
+Flip Y
+Pressure Roundness
+Tilt roundness
+Roundness Vertical Jitter
+Roundness Horizontal Jitter
+Shape filtering
+Grain behavior
+Moving
+Texturized
+Movement
+Depth
+Depth minimum
+Depth jitter
+Offset jitter
+Blend mode
+Contrast
+Grain filtering
+3D grain behaviour
+Grain follows camera
+Rendering mode
+Light Glaze
+Uniformed Glaze
+Intense Glaze
+Heavy Glaze
+Uniform Blending
+Intense Blending
+Blending
+Flow
+Wet edges
+Burnt edges
+Burnt edges mode
+Luminance blending
+Alpha Threshold
+Threshold Amount
+Classic Normal Combine mode
+Wet Mix
+Wet mix
+Dilution
+Charge
+Attack
+Pull
+Grade
+Blur jitter
+Wetness jitter
+Color dynamics
+Stamp color jitter
+Lightness
+Darkness
+Secondary color
+Stroke color jitter
+Color pressure
+Secondary Color
+Color tilt
+Color barrel roll
+Speed
+Jitter
+Bleed
+Tilt
+Gradation
+Size compression
+Barrel roll
+Cursor outline
+Hover
+Estimated pressure
+Hover fill
+All
+Brush properties
+Orient to screen
+Smudge Pull
+Brush behavior
+Maximum size
+Minimum size
+Maximum opacity
+Minimum opacity
+Materials
+3D Materials
+Metallic Source
+Roughness Source
+Preview render
+Preview properties
+Use stamp preview
+Pressure Minimum
+Pressure Scale
+Tilt angle
+About this brush
+Smooth
+Follow stroke
+Sharp
+Blunt
+Stamp
+Rolling
+Follow size
+Cropped
+Disabled
+Non-Metallic
+Glossy
+Matte
+source {kind:?}
+{kind:?}
+studio part {i}
+studio parts
+Primary
+Secondary
+part card
+Combine Mode
+combine mode
+brush studio
+Brush Studio
+studio page
+brush name
+edit source
+Drawing Pad
+pad menu
+Preview size
+preview size
+pad colour
+3D preview
+3d preview
+Clear drawing pad
+Reset all brush settings
+pad row
+Made by {}
+Create new reset point
+Reset brush
+Last reset point: {day}
+studio preview
+Normal
+studio slider
+Link tip sizes
+{degrees}\u{b0}
+tilt angle
+slider keypad
+keypad page
+{}{digit}
+switch row
+blend list
+brush maker
+brush signature
+Text
+Medium
+Rasterize this text layer?
+Its text can't be edited afterwards; you can paint on it.
+Rasterize
+text style
+chosen letters
+text editor
+text field
+Edit style
+edit style
+Typeface
+Design
+Font
+Regular
+Style
+text cells
+face {name}
+Kerning
+Tracking
+Leading
+Baseline
+Attributes
+all caps
+TTF
+OTF
+TTC
+OTC
+Import fonts
+Fonts
+Fonts imported
+Font imported
+the time-lapse's videos hold {gone} frames: their pictures went
+Purge Video?
+Purge
+Don't Purge
+30 Seconds
+Full length
+exporting the time-lapse: {e}
+The time-lapse video couldn't be made.
+There is no time-lapse to export yet.
+the first frame can't be read
+{name}.mp4
+a time-lapse video for a package: {e}
+a time-lapse video: {e}
+the time-lapse's videos can't be read here: their pictures stay
+no frames
+the encoder won't make it the size of those before
+procraft-segments-{}
+a package's time-lapse: {e}
+a package's time-lapse video: {e}
+MP4 video
+time-lapse replay
+Nothing recorded yet
+tool header
+tool button
+transform box
+Freeform
+Uniform
+Distort
+Warp
+Advanced Mesh
+Fit to Canvas
+transform toolbar
+transform popover
+Interpolation
+Magnetics
+Distance
+Velocity
+toolbar button
+menu slider
+Nearest
+Nearest Neighbor
+Bilinear
+Bicubic
+{}{unit}
+-{typed}
+transform numbers scrim
+transform numbers
+Angle
+number field
+numeric key
+its layer is hidden
+its group is hidden
+a layer in it is hidden
+another layer is shown alone
+it is hidden
+\u{201c}{name}\u{201d} can't be changed while {why}.
+Can't save
+The palettes couldn't be kept.
+Time-lapse
+The animation could not be exported.
+colour button
+Previous colour
+selection pointer
+Undo {name}
+Undo {n}
+Redo {name}
+Redo {n}
+Layer cleared
+Nothing is drawn there.
+Pictures and videos
+Brushes added to the library.
+This file has no brushes in it.
+Frames saved to timeline
+Can't insert it
+Adjustment applied
+Layer cut
+Layer copied
+Canvas copied
+Layer is locked
+\u{201c}{}\u{201d} can't be changed while it is locked.
+Layer is hidden
+Group is hidden
+Show
+Group is selected
+\u{201c}{}\u{201d} is a group: choose one of its layers to paint on.
+Group is empty
+\u{201c}{}\u{201d} holds no layers to change.
+Mesh is hidden
+\u{201c}{}\u{201d} can't be painted while it is hidden.
+Alpha Lock is on
+\u{201c}{}\u{201d} can't be liquified while its alpha is locked.
+Turn Off
+Mesh is locked
+\u{201c}{}\u{201d} can't be painted while it is locked.
+Open Layers
+Can't import this plugin
+This file can't be read.
+Now a plugin
+Unsupported model features
+Painting on this model may not go as expected because of:\n{}
+Painting
+Smudging
+Erasing
+{doing} with the current brush
+show the interface
+escape taken
+hover cross
+hover ring
+This video can't be opened.
+Making and opening videos needs ffmpeg: install it from your system's packages.
+this system lacks a video setting
+{} isn't a file's path
+the system's encoder doesn't take this video
+the writer takes no such video
+the writer didn't start
+no pixel buffer for a frame
+the writer stopped
+the encoder stopped taking frames
+a frame's pixel buffer can't be written
+a frame wasn't written
+the video wasn't finished in time
+the video wasn't finished
+the video's tracks can't be read
+the video's tracks weren't found in time
+the file has no video
+the video's frames can't be read
+the video can't be read
+the encoder doesn't take {w} x {h}: {e}
+no encoder takes this video
+a frame couldn't be drawn
+no size fits
+format=yuv420p
+/dev/dri/renderD128
+format=nv12,hwupload
+vulkan=gpu
+color=size={width}x{height}:rate=30
+making a {width} x {height} video with {codec}
+{width}x{height}
++faststart
+ffmpeg took no input
+ffmpeg: {}
+stream=width,height,avg_frame_rate
+csv=p=0
+no video size
+ffmpeg gave no output
+closing canvas

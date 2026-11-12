@@ -1,0 +1,387 @@
+Studio quality
+Lossless
+HEVC
+Background color
+Background hidden
+Backspace
+Next
+Done
+export card
+Exporting
+files opened from the Finder aren't taken: the app has no delegate
+C-unwind
+files opened from the Finder aren't taken: the app's delegate takes them itself
+{} file(s) opened from the Finder
+keeping the presets: {e}
+Tap + to start a new canvas
+Delete 1 artwork?
+Delete {n} artworks?
+This can't be undone.
+Stack
+More
+select done
+more options
+More Options
+renamed artwork
+rename artwork
+app mark
+Version 
+Start Gallery Recovery
+about recovery
+about close
+gallery spread
+preview close
+preview arrow
+Select
+new canvas
+gallery grid
+gallery cell
+swipe open
+stack left
+lifted artwork
+Delete \u{201c}{}\u{201d}?
+share formats
+Image Format
+thumbnail {dir}
+select marks
+{} artworks
+New canvas
+Screen Size
+screen size
+Edit
+played {i}
+gesture controls
+gesture page
+Reset to defaults
+Reset gesture controls?
+Every gesture goes back to how the app starts out.
+gesture switch
+Delay
+{seconds:.2}s
+gesture delay
+gradient map
+Gradient Map
+Gradient Library
+gradient done
+new gradient
+gradient cards
+gradient bar
+gradient menu
+2D Grid
+Isometric
+Symmetry
+guide size keypad
+Length
+guide canvas
+guide top
+Drawing Guides
+colour bar
+Tap to create vanishing points
+guide toolbar
+Thickness
+Grid size
+Options
+guide options
+Assisted Drawing
+Guide Options
+Vertical
+Horizontal
+Quadrant
+Radial
+Rotational Symmetry
+symmetry switch
+grid size chip
+layer choice
+Color
+Roughness
+Metallic
+A locked layer can’t be deleted. Unlock it first.
+blend editor
+layers panel
+layers frame
+new layer
+layers list
+Locked layer selection
+Select All
+Group
+Merge
+layers title menu
+Delete these layers?
+Undo brings them back.
+Those meshes aren't in the same texture set
+Unlock
+Lock
+mesh lock
+Unlock mesh
+Lock mesh
+mesh {index}
+mesh box
+Show Submesh
+Hide Submesh
+Replace Material Map Content
+This picture can't be opened.
+channel {c} {}
+channel tile
+\u{201c}{}\u{201d} is on every mesh of this texture set.
+Delete shared layer?
+layer options
+Text rasterized
+Assisted Reference
+Shared Reference
+Shared
+Assisted
+Private
+layer {}
+background visible
+background colour
+check on white
+check on grey
+check off white
+check off grey
+Darken
+Shade
+Lighten
+Subtract
+Divide
+brush library
+library frame
+Erase library
+Smudge library
+Brush library
+library search
+library brushes
+library sets
+Brush
+delete picked
+Combine
+combine picked
+Delete this set and its brushes?
+Delete this brush?
+Delete these brushes?
+It can't be brought back.
+Create new brush
+Create new set
+Import from Files
+library plus menu
+Import brushes
+Rename
+Customize icon
+library set menu
+set icon picker
+Brushes
+Brush set
+library recent menu
+Recent
+brush {key:?}
+brush previews
+the brushes' sample strokes aren't drawn: {e}
+Search
+clear search
+No results
+library results
+set icons
+set icon
+Find
+Unpin
+Pin
+The interface font is Inter, by The Inter Project Authors.\n\n
+\n\nThe app keeps Lucide icons (lucide.dev), by Lucide Icons and Contributors.\n\n
+licences offsets
+licences scrim
+licences text
+Studio
+Coast
+Auditorium
+City
+Nightlife
+Portside
+Industrial
+Sunrise
+Beach
+Mountain
+Daytime
+lighting studio view
+lighting studio bar
+Lighting Studio
+Add Light
+Environment
+studio pill
+A model can have four lights at most.
+studio done
+studio environment
+Show Environment
+show environment
+light settings
+Light Settings
+Intensity
+light slider
+light action
+Min
+Exposure
+Push
+Twirl Right
+Twirl Left
+Pinch
+Expand
+Crystals
+Edge
+Reconstruct
+Pressure
+Distortion
+Momentum
+liquify panel
+Adjust
+liquify way
+liquify kinds
+Liquify Mode
+liquify kind
+liquify adjust
+Strength
+liquify button
+model picture
+Flip Horizontal
+Flip Vertical
+Rotate 45\u{b0}
+model picture bar
+canvas overlays
+Picking color from reference
+Picking color from canvas
+shape bar
+Editing
+shape kinds
+shape kind
+Line
+Polyline
+Arc
+Ellipse
+Circle
+Triangle
+Equilateral
+Quadrilateral
+Rectangle
+a line
+a polyline
+an arc
+an ellipse
+a circle
+a triangle
+an equilateral triangle
+a quadrilateral
+a rectangle
+a square
+Snapped to {what}
+side bar place
+Opening a PDF needs pdftoppm: install poppler-utils from your system's packages.
+Page
+page-{}.png
+not a file's path
+not a PDF
+the PDF is locked with a password
+a page is missing
+page-{n}.png
+no sRGB colour space
+no bitmap to draw the page into
+the page's pixels came out short
+Pages:
+no pages
+drawn-{n}
+light_interface {}
+selection_x_ray {}
+right_handed {}
+brush_on_screen {}
+brush_cursor {}
+cursor_shows {}
+cursor_style {}
+colour_model {}
+rapid_undo_delay {}
+selection_visibility {}
+stabilization {}
+motion_filtering {}
+motion_expression {}
+pressure_smoothing {}
+tip_attached {}
+curve {}
+actions_tab {}
+pad_3d {}
+project_canvas {}
+orientation_memory {}
+fit_inside {}
+no_time_lapse {}
+simplified_undos {}
+speed_distance {}
+color_names {}
+single_touch_companion {}
+tap_assistance {}
+feedback_sounds {}
+color_history_shown {}
+drag_format {}
+drag_image_format {}
+recolor_threshold {}
+quick menu
+quick title
+quick button
+Set Action
+Brush Set
+quick picker
+picker back
+quick picker list
+quick menus
+QuickMenu
+quick menus list
+recolor reticle
+reference picture glass
+reference picture
+reference canvas crisp
+reference canvas
+reference canvas glass
+Import Image
+Can't import it
+reference bars
+import image
+top bar
+bottom bar
+Image
+Automatic
+Freehand
+Invert
+Feather
+Save & Load
+Color Fill
+X-Ray
+selection toolbar
+saved selection {i}
+selection popover
+Selections
+save selection
+Selection {}
+saved selection
+selection overlay
+Selection Threshold {:.1}%
+Canvas Orientation Memory
+An artwork opens zoomed and turned as it was left.
+Fit Canvas Inside Interface
+A fitted canvas keeps clear of the top bar and the sidebar.
+Disable Time-lapse
+New artworks don't record their time-lapse.
+Simplified Undos
+Strokes made in an adjustment undo together once it is left.
+Maximum Speed Distance
+How far the pen moves before a brush's speed dynamics count it as fast.
+Drag and Drop export
+Preferred file format
+Preferred image format
+Accessibility
+Single Touch Gestures Companion
+A floating bar of undo, redo, zoom, move and fit for one finger.
+Color Description Notifications
+A message names the colour once it stops changing.
+Feedback Sounds
+Undo, redo, tools and panels click as they are used.
+Tap Assistance - Initial Touch Location Support
+A tap lands where the finger first touched, even if it drifts before lifting.
+advanced settings
+Licenses
+settings choice menu
+settings row
+speed distance
+settings choice open

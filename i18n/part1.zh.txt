@@ -1,0 +1,451 @@
+Insert a file	插入文件
+Insert a photo	插入照片
+Take a photo	拍摄照片
+Cut	剪切
+Copy	拷贝
+Copy canvas	拷贝画布
+Paste	粘贴
+Reference	参考
+Canvas information	画布信息
+Share Model	分享模型
+ProCraft	ProCraft
+Procreate	Procreate
+USDZ	USDZ
+OBJ	OBJ
+Share Image	分享图片
+JPEG	JPEG
+PNG	PNG
+TIFF	TIFF
+Animated GIF	动画 GIF
+Animated PNG	动画 PNG
+Animated MP4	动画 MP4
+Animated HEVC	动画 HEVC
+Share Textures	分享纹理
+Show 2D texture	显示 2D 纹理
+Paint through mesh	穿透网格绘制
+Edit lighting & environment	编辑光照与环境
+View in AR	在 AR 中查看
+Add	添加
+Canvas	画布
+Share	分享
+Video	视频
+Prefs	偏好设置
+Help	帮助
+Insert a private file	插入私密文件
+Insert a private photo	插入私密照片
+Take a private photo	拍摄私密照片
+Add text	添加文字
+Paste Private	私密粘贴
+Crop & Resize	裁剪并调整大小
+Animation Assist	动画协助
+Page Assist	页面辅助
+Drawing Guide	绘图指引
+Edit Drawing Guide	编辑绘图指引
+Flip horizontal	水平翻转
+Flip vertical	垂直翻转
+PSD	PSD
+PDF	PDF
+Share Layers	分享图层
+PNG Files	PNG 文件
+Time-lapse Replay	延时视频回放
+Time-lapse Recording	延时视频录制
+Export time-lapse video	导出延时视频
+Light interface	浅色界面
+Right-hand interface	右侧界面
+Brush scaling	笔刷缩放
+Screen	屏幕
+Project canvas	投射画布
+Brush cursor	笔刷光标
+Advanced cursor settings	高级光标设置
+Pressure and Smoothing	压力与平滑
+Gesture controls	手势控制
+Plugins	插件
+Rapid undo delay	快速撤销延迟
+{delay:.2}s	{delay:.2} 秒
+Selection mask visibility	选区蒙版可见度
+Size & Opacity sidebar	大小与不透明度侧栏
+About ProCraft	关于 ProCraft
+Licences	许可协议
+Keyboard shortcuts	键盘快捷键
+Advanced settings	高级设置
+None	无
+Stabilization	防抖
+Motion Filtering	动态滤波
+Motion Filtering Expression	动态滤波表现
+actions panel	actions panel
+actions frame	actions frame
+Actions	操作
+actions rows	actions rows
+brush scaling	brush scaling
+Relative to canvas	相对于画布
+Relative to screen	相对于屏幕
+Import	导入
+import plugin	import plugin
+plugin cards	plugin cards
+Nothing imported yet. Import a .procraft-plugin file to add one.	尚未导入任何插件。导入 .procraft-plugin 文件即可添加。
+Advanced cursor	高级光标
+Brush cursor visibility	笔刷光标可见性
+Brush outline style	笔刷轮廓样式
+Show while hovering	悬停时显示
+Show while painting	绘制时显示
+Show both	两者都显示
+High contrast	高对比度
+Active color	当前颜色
+Per brush	按笔刷
+Pressure & Smoothing	压力与平滑
+pressure rows	pressure rows
+Tip Attachment	笔尖贴合
+App Pressure Sensitivity	全局压感灵敏度
+Reset all	全部重置
+plugin switch	plugin switch
+Turn on	开启
+Turn off	关闭
+Remove	移除
+plugin action	plugin action
+This couldn't be removed.	无法移除。
+private row	private row
+Cyan	青色
+Red	红色
+Magenta	洋红
+Green	绿色
+Yellow	黄色
+Blue	蓝色
+Shadows	阴影
+Midtones	中间调
+Highlights	高光
+Artifact	伪影
+Wave	波纹
+Signal	信号
+Diverge	分离
+Clouds	云彩
+Billows	起伏
+Ridges	山脊
+Full Color	全彩
+Screen Print	丝网印刷
+Newspaper	报纸
+Perspective	透视
+Displace	置换
+Positional	位置
+Directional	方向
+Max	最大
+option slider	option slider
+recolor toolbar	recolor toolbar
+Flood	填充范围
+noise toolbar	noise toolbar
+Scale	缩放
+Octaves	倍频
+Turbulence	湍流
+Single	单通道
+Multi	多通道
+noise channels	noise channels
+Additive	相加
+balance panel	balance panel
+Color Balance	色彩平衡
+curves panel	curves panel
+Gamma	伽马
+curve delete	curve delete
+Delete	删除
+Channel	通道
+additive in the menu	additive in the menu
+menu additive	menu additive
+options menu scrim	options menu scrim
+options menu	options menu
+glitch toolbar	glitch toolbar
+Amount	数量
+Block Size	块大小
+Zoom	缩放
+Amplitude	振幅
+Frequency	频率
+Red shift	红色偏移
+Green shift	绿色偏移
+Blue shift	蓝色偏移
+bloom toolbar	bloom toolbar
+Transition	过渡
+Size	大小
+Burn	烧灼
+plugin filter toolbar	plugin filter toolbar
+halftone toolbar	halftone toolbar
+chromatic toolbar	chromatic toolbar
+Fall off	衰减
+Blur	模糊
+Transparency	透明度
+perspective toolbar	perspective toolbar
+adjustments menu	adjustments menu
+adjustments frame	adjustments frame
+Adjustments	调整
+adjust modes button	adjust modes button
+adjustment pie	adjustment pie
+Apply	应用
+Undo	撤销
+Preview	预览
+Cancel	取消
+Reset	重置
+clone puck	clone puck
+perspective puck	perspective puck
+adjustment bar	adjustment bar
+layer opacity bar	layer opacity bar
+Opacity	不透明度
+adjust modes	adjust modes
+Layer	图层
+Pencil	铅笔
+adjust mode	adjust mode
+hsb panel	hsb panel
+Hue	色相
+Saturation	饱和度
+Brightness	亮度
+PDF quality	PDF 质量
+Best	最佳
+Better	更好
+Good	良好
+Square	方形
+{base}.{}	{base}.{}
+exporting an animation: {e}	exporting an animation: {e}
+export frame {i}	export frame {i}
+animated export	animated export
+Export	导出
+Settings	设置
+export settings	export settings
+Max Resolution	最高分辨率
+Web Ready	适合网络
+Dithering	抖动
+Per frame color palette	每帧调色板
+Transparent background	透明背景
+Frames per second	每秒帧数
+fps slider	fps slider
+turntable size	turntable size
+Animated rotate	旋转动画
+Animated swing	摆动动画
+turntable way	turntable way
+Animation duration	动画时长
+Zoom distance	缩放距离
+Ease	缓动
+turntable slider	turntable slider
+Show environment	显示环境
+turntable environment	turntable environment
+Untitled Artwork	未命名作品
+Share as {}	分享为 {}
+Can't export	无法导出
+animation bar	animation bar
+Pause	暂停
+Play	播放
+New Page	新建页面
+Add Frame	添加帧
+frame {id}	frame {id}
+animation settings	animation settings
+Colors	颜色
+onion picker	onion picker
+Loop	循环
+Ping-Pong	往复
+One Shot	单次
+Frames Per Second	每秒帧数
+Onion skin frames	洋葱皮帧数
+Onion skin opacity	洋葱皮不透明度
+Blend primary frame	混合主帧
+Onion skin colors	洋葱皮颜色
+onion colours	onion colours
+frame options	frame options
+Page options	页面选项
+Frame options	帧选项
+Hold duration	停留时长
+Duplicate	复制
+Foreground	前景
+Background	背景
+Opening…	正在打开…
+Getting the canvas ready…	正在准备画布…
+getting ready	getting ready
+MemTotal:	MemTotal:
+{} took {} ms	{} took {} ms
+Exporting…	正在导出…
+Finishing the fill…	正在完成填充…
+{}{unsaved} — ProCraft	{}{unsaved} — ProCraft
+Palette added.	调色板已添加。
+This palette can't be read.	无法读取此调色板。
+it stopped	it stopped
+Can't open the artwork	无法打开作品
+Can't open the picture	无法打开图片
+the graphics device stopped as this backend started: starting again on the next	the graphics device stopped as this backend started: starting again on the next
+the graphics device stopped, and it couldn't start itself again	图形设备已停止，且无法自行重启
+The graphics device stopped	图形设备已停止
+ProCraft starts again, with the artwork as it was last saved.	ProCraft 将重新启动，作品保持为上次保存的状态。
+the canvases' pipelines failed on this graphics backend: the next start takes the next	the canvases' pipelines failed on this graphics backend: the next start takes the next
+the canvases' pipelines failed on this graphics backend: starting again on the next	the canvases' pipelines failed on this graphics backend: starting again on the next
+its pipelines failed on this graphics backend, and it couldn't start itself again	其管线在此图形后端上失败，且无法自行重启
+closing while a canvas is still being made: the window goes, the artwork is kept once it is made	closing while a canvas is still being made: the window goes, the artwork is kept once it is made
+Can't keep the artwork	无法保留作品
+About this artwork	关于此作品
+Dimensions	尺寸
+Layers	图层
+Color profile	色彩配置
+Video settings	视频设置
+Statistics	统计
+keeping the author's photo: {e}	keeping the author's photo: {e}
+The photo couldn't be kept.	无法保留照片。
+keeping the signature: {e}	keeping the signature: {e}
+The signature couldn't be kept.	无法保留签名。
+canvas info	canvas info
+Canvas Info	画布信息
+Change color profile?	更改色彩配置？
+Its colours keep their values and look as the new profile shows them, in the time-lapse recording too.	颜色数值保持不变，按新配置显示，延时视频中也是如此。
+Change	更改
+Don't change	不更改
+info page	info page
+Date created	创建日期
+Date modified	修改日期
+Pixel width	像素宽度
+Pixel height	像素高度
+Physical width	物理宽度
+Physical height	物理高度
+{dpi:.1}	{dpi:.1}
+DPI	DPI
+Maximum layers	最大图层数
+Layers used	已用图层
+Layers available	可用图层
+Assisted layers	辅助图层
+Clipping layers	剪裁图层
+Layer masks	图层蒙版
+Layer groups	图层组
+Current color profile	当前色彩配置
+Available color profiles	可用色彩配置
+Video length	视频长度
+Video quality	视频质量
+Video resolution	视频分辨率
+Video file size	视频文件大小
+Video codec	视频编码
+Total strokes made	总笔触数
+Tracked time	累计时间
+Total file size	文件总大小
+Photo	照片
+Pictures	图片
+Made by 	作者：
+Name	姓名
+Sign here	在此签名
+clear signature	clear signature
+author photo	author photo
+Gallery	图库
+side bar	side bar
+side lit	side lit
+size slider	size slider
+opacity slider	opacity slider
+slider panel	slider panel
+size preview stamp	size preview stamp
+colour drop dot	colour drop dot
+colour drop band	colour drop band
+ColorDrop	ColorDrop
+Continue filling	继续填充
+colour drop button	colour drop button
+Threshold {}%	阈值 {}%
+HSB	HSB
+HLS	HLS
+HSY\u{2032}	HSY\u{2032}
+OKLab	OKLab
+Complementary	互补色
+Split Complementary	分裂互补色
+Analogous	类似色
+Triadic	三角配色
+Tetradic	四角配色
+luma slider	luma slider
+colour model	colour model
+colour models	colour models
+colour panel	colour panel
+colour frame	colour frame
+background done	background done
+Palettes	调色板
+new palette	new palette
+History	历史记录
+short menu	short menu
+Clear	清除
+clear history	clear history
+palette swatch	palette swatch
+palette slot	palette slot
+short colour menu	short colour menu
+Color history	颜色历史
+Active palette	当前调色板
+Clear history	清除历史记录
+short clear	short clear
+hue ring	hue ring
+colour disc	colour disc
+classic square	classic square
+harmony wheel	harmony wheel
+harmony brightness	harmony brightness
+classic hue	classic hue
+classic saturation	classic saturation
+classic brightness	classic brightness
+harmony kind	harmony kind
+harmony kinds	harmony kinds
+Hexadecimal	十六进制
+{rgb:06X}	{rgb:06X}
+hex field	hex field
+hex pad	hex pad
+DEF	DEF
+ABC	ABC
+hex key	hex key
+hex back	hex back
+Compact	紧凑
+Cards	卡片
+palette view	palette view
+palette name	palette name
+palette more	palette more
+Set as active	设为当前
+palette menu	palette menu
+Palette	调色板
+Create new palette	新建调色板
+New from file	从文件新建
+New from photos	从照片新建
+Restore example palettes	恢复示例调色板
+new palette menu	new palette menu
+New palette from a file	从文件新建调色板
+New palette from a picture	从图片新建调色板
+This picture can't be read.	无法读取此图片。
+Disc	圆盘
+Classic	经典
+Harmony	和谐
+Value	数值
+mode tab	mode tab
+compact colours	compact colours
+compact hue	compact hue
+compact palettes	compact palettes
+compact swatch	compact swatch
+compact tab	compact tab
+RGB	RGB
+value switch	value switch
+compact value	compact value
+touch companion	touch companion
+companion grab	companion grab
+Redo	重做
+Move	移动
+Fit Canvas	适合画布
+copy and paste	copy and paste
+Copy & Paste	拷贝与粘贴
+Copy All	全部拷贝
+Cut & Paste	剪切与粘贴
+Crop and Resize	裁剪并调整大小
+crop settings	crop settings
+crop width	crop width
+aspect lock	aspect lock
+crop height	crop height
+crop dpi	crop dpi
+Resample canvas	重采样画布
+Snapping	吸附
+crop switch	crop switch
+Rotation	旋转
+{degrees:.1}\u{b0}	{degrees:.1}\u{b0}
+crop turn	crop turn
+{value}{unit_text}	{value}{unit_text}
+curve node menu	curve node menu
+Millimeters	毫米
+Centimeters	厘米
+Inches	英寸
+Pixels	像素
+Time-lapse settings	延时视频设置
+Canvas properties	画布属性
+Untitled Canvas	未命名画布
+custom canvas	custom canvas
+Custom Canvas	自定义画布
+Width	宽度
+Height	高度
+Maximum Layers	最大图层数
+ {unit}	 {unit}
+size row	size row
+CMYK	CMYK
+Low quality	低质量
+Good quality	良好质量

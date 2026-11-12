@@ -1,0 +1,58 @@
+Hue, Saturation, Brightness	色相、饱和度、亮度
+Curves	曲线
+Gaussian Blur	高斯模糊
+Motion Blur	动感模糊
+Perspective Blur	透视模糊
+Noise	杂色
+Sharpen	锐化
+Bloom	泛光
+Glitch	故障
+Halftone	半色调
+Chromatic Aberration	色差
+Liquify	液化
+Clone	仿制
+Plugin	插件
+No Action	无操作
+Actual size	实际大小
+Add Text	添加文本
+Alpha Lock	Alpha 锁定
+Clear layer	清除图层
+Clipboard	剪贴板
+Delete layer	删除图层
+Drawing Assist	绘图辅助
+Duplicate layer	拷贝图层
+Erase	擦除
+Eyedropper	吸管
+Fill layer	填充图层
+Fit canvas	适应画布
+Flip horizontally	水平翻转
+Flip vertically	垂直翻转
+Full screen	全屏
+Isometric Guide visibility	等距参考线可见性
+Layer Select	图层选择
+Layer opacity	图层不透明度
+Layer visibility	图层可见性
+Merge down	向下合并
+New layer	新建图层
+Next frame	下一帧
+Onion skin	洋葱皮
+Open Adjustments	打开调整
+Open Color panel	打开颜色面板
+Open Layers panel	打开图层面板
+Paint	绘画
+Perspective Guide visibility	透视参考线可见性
+Previous brush	上一个画笔
+Previous color	上一个颜色
+Previous frame	上一帧
+QuickShape	快速形状
+QuickShape stroke	快速形状描边
+Recolor	重新着色
+Select brush	选择画笔
+Select layer contents	选择图层内容
+Selection tool	选择工具
+Single touch move	单指移动
+Single touch zoom	单指缩放
+Smudge	涂抹
+Solo visibility	单独可见性
+Symmetry Guide visibility	对称参考线可见性
+Transform tool	变换工具

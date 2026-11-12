@@ -1,0 +1,393 @@
+shortcuts scrim	shortcuts scrim
+shortcuts list	shortcuts list
+RIFF	RIFF
+WAVEfmt 	WAVEfmt 
+Import a photo	导入照片
+Import a file	导入文件
+Source Library	来源库
+source editor	source editor
+Shape Editor	形状编辑器
+Grain Editor	颗粒编辑器
+Metallic Editor	金属编辑器
+Roughness Editor	粗糙度编辑器
+Auto repeat	自动重复
+Grain scale	颗粒缩放
+Rotate	旋转
+Border overlap	边缘重叠
+Maximal	最大
+Mask hardness	蒙版硬度
+Soft	柔和
+Hard	硬
+Mirror overlap	镜像重叠
+Pyramid blending	金字塔混合
+repeat switch	repeat switch
+Image source options	图像来源选项
+import menu	import menu
+source import	source import
+library veil	library veil
+library cancel	library cancel
+Shape Source	形状来源
+Grain Source	颗粒来源
+library tab	library tab
+source library	source library
+library cell	library cell
+repeat slider	repeat slider
+Search Library	搜索来源库
+source library search	source library search
+Can't paste	无法粘贴
+There's no picture to paste.	没有可粘贴的图片。
+No filtering	无过滤
+Classic filtering	经典过滤
+Improved filtering	改进过滤
+Stroke path	笔触路径
+Taper	渐细
+Shape	形状
+Grain	颗粒
+Rendering	渲染
+Dynamics	动态
+Stylus	触控笔
+Properties	属性
+Stroke properties	笔触属性
+Spacing	间距
+Spacing Jitter	间距抖动
+Jitter Lateral	侧向抖动
+Jitter Linear	线性抖动
+StreamLine	流线
+Motion filtering	运动过滤
+Expression	表现
+Pressure taper	压力渐细
+Tip	笔尖
+Tip animation	笔尖动画
+Touch taper	触摸渐细
+Taper properties	渐细属性
+Classic taper	经典渐细
+Input style	输入方式
+Touch only	仅触摸
+Azimuth	方位角
+Azimuth and barrel roll	方位角与笔身旋转
+Relative to stroke	相对笔触
+Touch properties	触摸属性
+Shape properties	形状属性
+Scatter	散布
+Count	数量
+Count jitter	数量抖动
+Randomized	随机
+Flip X	翻转 X
+Flip Y	翻转 Y
+Pressure Roundness	压力圆度
+Tilt roundness	倾斜圆度
+Roundness Vertical Jitter	圆度垂直抖动
+Roundness Horizontal Jitter	圆度水平抖动
+Shape filtering	形状过滤
+Grain behavior	颗粒行为
+Moving	移动
+Texturized	纹理化
+Movement	移动量
+Depth	深度
+Depth minimum	最小深度
+Depth jitter	深度抖动
+Offset jitter	偏移抖动
+Blend mode	混合模式
+Contrast	对比度
+Grain filtering	颗粒过滤
+3D grain behaviour	3D 颗粒行为
+Grain follows camera	颗粒跟随相机
+Rendering mode	渲染模式
+Light Glaze	轻度罩染
+Uniformed Glaze	均匀罩染
+Intense Glaze	强烈罩染
+Heavy Glaze	厚重罩染
+Uniform Blending	均匀混合
+Intense Blending	强烈混合
+Blending	混合
+Flow	流量
+Wet edges	湿边
+Burnt edges	焦边
+Burnt edges mode	焦边模式
+Luminance blending	明度混合
+Alpha Threshold	Alpha 阈值
+Threshold Amount	阈值量
+Classic Normal Combine mode	经典正常合并模式
+Wet Mix	湿画混色
+Wet mix	Wet mix
+Dilution	稀释
+Charge	载墨
+Attack	起笔
+Pull	拉拽
+Grade	渐变
+Blur jitter	模糊抖动
+Wetness jitter	湿度抖动
+Color dynamics	颜色动态
+Stamp color jitter	图章颜色抖动
+Lightness	亮度
+Darkness	暗度
+Secondary color	辅色
+Stroke color jitter	笔触颜色抖动
+Color pressure	颜色压感
+Secondary Color	辅色
+Color tilt	颜色倾斜
+Color barrel roll	颜色笔身旋转
+Speed	速度
+Jitter	抖动
+Bleed	渗色
+Tilt	倾斜
+Gradation	渐层
+Size compression	尺寸压缩
+Barrel roll	笔身旋转
+Cursor outline	光标轮廓
+Hover	悬停
+Estimated pressure	估算压力
+Hover fill	悬停填充
+All	全部
+Brush properties	笔刷属性
+Orient to screen	朝向屏幕
+Smudge Pull	涂抹拉拽
+Brush behavior	笔刷行为
+Maximum size	最大尺寸
+Minimum size	最小尺寸
+Maximum opacity	最大不透明度
+Minimum opacity	最小不透明度
+Materials	材质
+3D Materials	3D 材质
+Metallic Source	金属来源
+Roughness Source	粗糙度来源
+Preview render	预览渲染
+Preview properties	预览属性
+Use stamp preview	使用图章预览
+Pressure Minimum	最小压力
+Pressure Scale	压力比例
+Tilt angle	倾斜角度
+About this brush	关于此笔刷
+Smooth	平滑
+Follow stroke	跟随笔触
+Sharp	尖锐
+Blunt	圆钝
+Stamp	图章
+Rolling	滚转
+Follow size	跟随尺寸
+Cropped	已裁剪
+Disabled	已停用
+Non-Metallic	非金属
+Glossy	光泽
+Matte	哑光
+source {kind:?}	source {kind:?}
+{kind:?}	{kind:?}
+studio part {i}	studio part {i}
+studio parts	studio parts
+Primary	主色
+Secondary	辅色
+part card	part card
+Combine Mode	合并模式
+combine mode	combine mode
+brush studio	brush studio
+Brush Studio	笔刷工作室
+studio page	studio page
+brush name	brush name
+edit source	edit source
+Drawing Pad	绘图板
+pad menu	pad menu
+Preview size	预览尺寸
+preview size	preview size
+pad colour	pad colour
+3D preview	3D 预览
+3d preview	3d preview
+Clear drawing pad	清空绘图板
+Reset all brush settings	重置所有笔刷设置
+pad row	pad row
+Made by {}	由 {} 制作
+Create new reset point	新建重置点
+Reset brush	重置笔刷
+Last reset point: {day}	上次重置点：{day}
+studio preview	studio preview
+Normal	正常
+studio slider	studio slider
+Link tip sizes	链接笔尖尺寸
+{degrees}\u{b0}	{degrees}\u{b0}
+tilt angle	tilt angle
+slider keypad	slider keypad
+keypad page	keypad page
+{}{digit}	{}{digit}
+switch row	switch row
+blend list	blend list
+brush maker	brush maker
+brush signature	brush signature
+Text	文字
+Medium	中等
+Rasterize this text layer?	要将此文字图层栅格化吗？
+Its text can't be edited afterwards; you can paint on it.	之后文字将无法编辑，但可以在其上绘制。
+Rasterize	栅格化
+text style	text style
+chosen letters	chosen letters
+text editor	text editor
+text field	text field
+Edit style	编辑样式
+edit style	edit style
+Typeface	字型
+Design	设计
+Font	字体
+Regular	常规
+Style	样式
+text cells	text cells
+face {name}	face {name}
+Kerning	字偶间距
+Tracking	字距
+Leading	行距
+Baseline	基线
+Attributes	属性
+all caps	all caps
+TTF	TTF
+OTF	OTF
+TTC	TTC
+OTC	OTC
+Import fonts	导入字体
+Fonts	字体
+Fonts imported	已导入的字体
+Font imported	字体已导入
+the time-lapse's videos hold {gone} frames: their pictures went	延时视频共 {gone} 帧，其画面已丢失
+Purge Video?	清除视频？
+Purge	清除
+Don't Purge	不清除
+30 Seconds	30 秒
+Full length	完整长度
+exporting the time-lapse: {e}	正在导出延时视频：{e}
+The time-lapse video couldn't be made.	无法生成延时视频。
+There is no time-lapse to export yet.	还没有可导出的延时视频。
+the first frame can't be read	无法读取第一帧
+{name}.mp4	{name}.mp4
+a time-lapse video for a package: {e}	文件包的延时视频：{e}
+a time-lapse video: {e}	延时视频：{e}
+the time-lapse's videos can't be read here: their pictures stay	此处无法读取延时视频，其画面将保留
+no frames	无帧
+the encoder won't make it the size of those before	编码器无法将其制成与之前相同的大小
+procraft-segments-{}	procraft-segments-{}
+a package's time-lapse: {e}	文件包的延时：{e}
+a package's time-lapse video: {e}	文件包的延时视频：{e}
+MP4 video	MP4 视频
+time-lapse replay	延时回放
+Nothing recorded yet	尚未录制任何内容
+tool header	tool header
+tool button	tool button
+transform box	transform box
+Freeform	自由变形
+Uniform	等比
+Distort	扭曲
+Warp	弯曲
+Advanced Mesh	高级网格
+Fit to Canvas	适合画布
+transform toolbar	transform toolbar
+transform popover	transform popover
+Interpolation	插值
+Magnetics	磁性
+Distance	距离
+Velocity	速度
+toolbar button	toolbar button
+menu slider	menu slider
+Nearest	最近邻
+Nearest Neighbor	邻近
+Bilinear	双线性
+Bicubic	双三次
+{}{unit}	{}{unit}
+-{typed}	-{typed}
+transform numbers scrim	transform numbers scrim
+transform numbers	transform numbers
+Angle	角度
+number field	number field
+numeric key	numeric key
+its layer is hidden	图层已隐藏
+its group is hidden	所在组已隐藏
+a layer in it is hidden	组内有图层已隐藏
+another layer is shown alone	另一图层处于单独显示
+it is hidden	它已隐藏
+\u{201c}{name}\u{201d} can't be changed while {why}.	\u{201c}{name}\u{201d} 无法更改，因为{why}。
+Can't save	无法保存
+The palettes couldn't be kept.	无法保留调色板。
+Time-lapse	延时视频
+The animation could not be exported.	无法导出动画。
+colour button	colour button
+Previous colour	上一个颜色
+selection pointer	selection pointer
+Undo {name}	撤销 {name}
+Undo {n}	撤销 {n}
+Redo {name}	重做 {name}
+Redo {n}	重做 {n}
+Layer cleared	图层已清除
+Nothing is drawn there.	该处没有任何绘制内容。
+Pictures and videos	图片与视频
+Brushes added to the library.	笔刷已添加到图库。
+This file has no brushes in it.	此文件中没有笔刷。
+Frames saved to timeline	帧已保存到时间轴
+Can't insert it	无法插入
+Adjustment applied	已应用调整
+Layer cut	图层已剪切
+Layer copied	图层已拷贝
+Canvas copied	画布已拷贝
+Layer is locked	图层已锁定
+\u{201c}{}\u{201d} can't be changed while it is locked.	\u{201c}{}\u{201d} 处于锁定状态，无法更改。
+Layer is hidden	图层已隐藏
+Group is hidden	组已隐藏
+Show	显示
+Group is selected	已选中组
+\u{201c}{}\u{201d} is a group: choose one of its layers to paint on.	\u{201c}{}\u{201d} 是一个组：请选择其中的图层进行绘制。
+Group is empty	组为空
+\u{201c}{}\u{201d} holds no layers to change.	\u{201c}{}\u{201d} 中没有可更改的图层。
+Mesh is hidden	网格已隐藏
+\u{201c}{}\u{201d} can't be painted while it is hidden.	\u{201c}{}\u{201d} 处于隐藏状态，无法绘制。
+Alpha Lock is on	Alpha 锁定已开启
+\u{201c}{}\u{201d} can't be liquified while its alpha is locked.	\u{201c}{}\u{201d} 的 Alpha 已锁定，无法液化。
+Turn Off	关闭
+Mesh is locked	网格已锁定
+\u{201c}{}\u{201d} can't be painted while it is locked.	\u{201c}{}\u{201d} 处于锁定状态，无法绘制。
+Open Layers	打开图层
+Can't import this plugin	无法导入此插件
+This file can't be read.	无法读取此文件。
+Now a plugin	已转为插件
+Unsupported model features	不支持的模型功能
+Painting on this model may not go as expected because of:\n{}	在此模型上绘制可能无法达到预期效果，原因如下：\n{}
+Painting	绘制
+Smudging	涂抹
+Erasing	擦除
+{doing} with the current brush	用当前笔刷{doing}
+show the interface	显示界面
+escape taken	escape taken
+hover cross	hover cross
+hover ring	hover ring
+This video can't be opened.	无法打开此视频。
+Making and opening videos needs ffmpeg: install it from your system's packages.	制作和打开视频需要 ffmpeg：请通过系统软件包安装。
+this system lacks a video setting	此系统缺少视频设置
+{} isn't a file's path	{} 不是文件路径
+the system's encoder doesn't take this video	系统编码器无法处理此视频
+the writer takes no such video	写入器不支持此类视频
+the writer didn't start	写入器未能启动
+no pixel buffer for a frame	没有可用于该帧的像素缓冲区
+the writer stopped	写入器已停止
+the encoder stopped taking frames	编码器已停止接收帧
+a frame's pixel buffer can't be written	无法写入帧的像素缓冲区
+a frame wasn't written	有一帧未能写入
+the video wasn't finished in time	视频未能在规定时间内完成
+the video wasn't finished	视频未能完成
+the video's tracks can't be read	无法读取视频的轨道
+the video's tracks weren't found in time	未能在规定时间内找到视频轨道
+the file has no video	文件中没有视频
+the video's frames can't be read	无法读取视频的帧
+the video can't be read	无法读取视频
+the encoder doesn't take {w} x {h}: {e}	编码器无法处理 {w} x {h}：{e}
+no encoder takes this video	没有编码器能处理此视频
+a frame couldn't be drawn	无法绘制该帧
+no size fits	没有合适的尺寸
+format=yuv420p	format=yuv420p
+/dev/dri/renderD128	/dev/dri/renderD128
+format=nv12,hwupload	format=nv12,hwupload
+vulkan=gpu	vulkan=gpu
+color=size={width}x{height}:rate=30	color=size={width}x{height}:rate=30
+making a {width} x {height} video with {codec}	正在制作 {width} x {height} 的视频，使用 {codec}
+{width}x{height}	{width}x{height}
++faststart	+faststart
+ffmpeg took no input	ffmpeg 未收到输入
+ffmpeg: {}	ffmpeg：{}
+stream=width,height,avg_frame_rate	stream=width,height,avg_frame_rate
+csv=p=0	csv=p=0
+no video size	没有视频尺寸
+ffmpeg gave no output	ffmpeg 没有输出
+closing canvas	closing canvas
+Wet mix	湿画混色
+Language	语言

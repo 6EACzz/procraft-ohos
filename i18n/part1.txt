@@ -1,0 +1,451 @@
+Insert a file
+Insert a photo
+Take a photo
+Cut
+Copy
+Copy canvas
+Paste
+Reference
+Canvas information
+Share Model
+ProCraft
+Procreate
+USDZ
+OBJ
+Share Image
+JPEG
+PNG
+TIFF
+Animated GIF
+Animated PNG
+Animated MP4
+Animated HEVC
+Share Textures
+Show 2D texture
+Paint through mesh
+Edit lighting & environment
+View in AR
+Add
+Canvas
+Share
+Video
+Prefs
+Help
+Insert a private file
+Insert a private photo
+Take a private photo
+Add text
+Paste Private
+Crop & Resize
+Animation Assist
+Page Assist
+Drawing Guide
+Edit Drawing Guide
+Flip horizontal
+Flip vertical
+PSD
+PDF
+Share Layers
+PNG Files
+Time-lapse Replay
+Time-lapse Recording
+Export time-lapse video
+Light interface
+Right-hand interface
+Brush scaling
+Screen
+Project canvas
+Brush cursor
+Advanced cursor settings
+Pressure and Smoothing
+Gesture controls
+Plugins
+Rapid undo delay
+{delay:.2}s
+Selection mask visibility
+Size & Opacity sidebar
+About ProCraft
+Licences
+Keyboard shortcuts
+Advanced settings
+None
+Stabilization
+Motion Filtering
+Motion Filtering Expression
+actions panel
+actions frame
+Actions
+actions rows
+brush scaling
+Relative to canvas
+Relative to screen
+Import
+import plugin
+plugin cards
+Nothing imported yet. Import a .procraft-plugin file to add one.
+Advanced cursor
+Brush cursor visibility
+Brush outline style
+Show while hovering
+Show while painting
+Show both
+High contrast
+Active color
+Per brush
+Pressure & Smoothing
+pressure rows
+Tip Attachment
+App Pressure Sensitivity
+Reset all
+plugin switch
+Turn on
+Turn off
+Remove
+plugin action
+This couldn't be removed.
+private row
+Cyan
+Red
+Magenta
+Green
+Yellow
+Blue
+Shadows
+Midtones
+Highlights
+Artifact
+Wave
+Signal
+Diverge
+Clouds
+Billows
+Ridges
+Full Color
+Screen Print
+Newspaper
+Perspective
+Displace
+Positional
+Directional
+Max
+option slider
+recolor toolbar
+Flood
+noise toolbar
+Scale
+Octaves
+Turbulence
+Single
+Multi
+noise channels
+Additive
+balance panel
+Color Balance
+curves panel
+Gamma
+curve delete
+Delete
+Channel
+additive in the menu
+menu additive
+options menu scrim
+options menu
+glitch toolbar
+Amount
+Block Size
+Zoom
+Amplitude
+Frequency
+Red shift
+Green shift
+Blue shift
+bloom toolbar
+Transition
+Size
+Burn
+plugin filter toolbar
+halftone toolbar
+chromatic toolbar
+Fall off
+Blur
+Transparency
+perspective toolbar
+adjustments menu
+adjustments frame
+Adjustments
+adjust modes button
+adjustment pie
+Apply
+Undo
+Preview
+Cancel
+Reset
+clone puck
+perspective puck
+adjustment bar
+layer opacity bar
+Opacity
+adjust modes
+Layer
+Pencil
+adjust mode
+hsb panel
+Hue
+Saturation
+Brightness
+PDF quality
+Best
+Better
+Good
+Square
+{base}.{}
+exporting an animation: {e}
+export frame {i}
+animated export
+Export
+Settings
+export settings
+Max Resolution
+Web Ready
+Dithering
+Per frame color palette
+Transparent background
+Frames per second
+fps slider
+turntable size
+Animated rotate
+Animated swing
+turntable way
+Animation duration
+Zoom distance
+Ease
+turntable slider
+Show environment
+turntable environment
+Untitled Artwork
+Share as {}
+Can't export
+animation bar
+Pause
+Play
+New Page
+Add Frame
+frame {id}
+animation settings
+Colors
+onion picker
+Loop
+Ping-Pong
+One Shot
+Frames Per Second
+Onion skin frames
+Onion skin opacity
+Blend primary frame
+Onion skin colors
+onion colours
+frame options
+Page options
+Frame options
+Hold duration
+Duplicate
+Foreground
+Background
+Opening…
+Getting the canvas ready…
+getting ready
+MemTotal:
+{} took {} ms
+Exporting…
+Finishing the fill…
+{}{unsaved} — ProCraft
+Palette added.
+This palette can't be read.
+it stopped
+Can't open the artwork
+Can't open the picture
+the graphics device stopped as this backend started: starting again on the next
+the graphics device stopped, and it couldn't start itself again
+The graphics device stopped
+ProCraft starts again, with the artwork as it was last saved.
+the canvases' pipelines failed on this graphics backend: the next start takes the next
+the canvases' pipelines failed on this graphics backend: starting again on the next
+its pipelines failed on this graphics backend, and it couldn't start itself again
+closing while a canvas is still being made: the window goes, the artwork is kept once it is made
+Can't keep the artwork
+About this artwork
+Dimensions
+Layers
+Color profile
+Video settings
+Statistics
+keeping the author's photo: {e}
+The photo couldn't be kept.
+keeping the signature: {e}
+The signature couldn't be kept.
+canvas info
+Canvas Info
+Change color profile?
+Its colours keep their values and look as the new profile shows them, in the time-lapse recording too.
+Change
+Don't change
+info page
+Date created
+Date modified
+Pixel width
+Pixel height
+Physical width
+Physical height
+{dpi:.1}
+DPI
+Maximum layers
+Layers used
+Layers available
+Assisted layers
+Clipping layers
+Layer masks
+Layer groups
+Current color profile
+Available color profiles
+Video length
+Video quality
+Video resolution
+Video file size
+Video codec
+Total strokes made
+Tracked time
+Total file size
+Photo
+Pictures
+Made by 
+Name
+Sign here
+clear signature
+author photo
+Gallery
+side bar
+side lit
+size slider
+opacity slider
+slider panel
+size preview stamp
+colour drop dot
+colour drop band
+ColorDrop
+Continue filling
+colour drop button
+Threshold {}%
+HSB
+HLS
+HSY\u{2032}
+OKLab
+Complementary
+Split Complementary
+Analogous
+Triadic
+Tetradic
+luma slider
+colour model
+colour models
+colour panel
+colour frame
+background done
+Palettes
+new palette
+History
+short menu
+Clear
+clear history
+palette swatch
+palette slot
+short colour menu
+Color history
+Active palette
+Clear history
+short clear
+hue ring
+colour disc
+classic square
+harmony wheel
+harmony brightness
+classic hue
+classic saturation
+classic brightness
+harmony kind
+harmony kinds
+Hexadecimal
+{rgb:06X}
+hex field
+hex pad
+DEF
+ABC
+hex key
+hex back
+Compact
+Cards
+palette view
+palette name
+palette more
+Set as active
+palette menu
+Palette
+Create new palette
+New from file
+New from photos
+Restore example palettes
+new palette menu
+New palette from a file
+New palette from a picture
+This picture can't be read.
+Disc
+Classic
+Harmony
+Value
+mode tab
+compact colours
+compact hue
+compact palettes
+compact swatch
+compact tab
+RGB
+value switch
+compact value
+touch companion
+companion grab
+Redo
+Move
+Fit Canvas
+copy and paste
+Copy & Paste
+Copy All
+Cut & Paste
+Crop and Resize
+crop settings
+crop width
+aspect lock
+crop height
+crop dpi
+Resample canvas
+Snapping
+crop switch
+Rotation
+{degrees:.1}\u{b0}
+crop turn
+{value}{unit_text}
+curve node menu
+Millimeters
+Centimeters
+Inches
+Pixels
+Time-lapse settings
+Canvas properties
+Untitled Canvas
+custom canvas
+Custom Canvas
+Width
+Height
+Maximum Layers
+ {unit}
+size row
+CMYK
+Low quality
+Good quality

@@ -1,0 +1,87 @@
+A finger paints a model; with □ held it turns it	手指可以在模型上绘画，按住 □ 则转动模型
+Alpha Lock off	Alpha 锁定关
+Alpha Lock on	Alpha 锁定开
+Automatic Full Screen	自动全屏
+Brush size	笔刷大小
+Clear Layer	清除图层
+Clear the layer	清除该图层
+Clipping Mask	剪贴蒙版
+Colours	颜色
+Combine Down	合成向下
+Comic	漫画
+Copy the canvas	拷贝画布
+Copy the layer	拷贝图层
+Customize QuickMenu	自定义快捷菜单
+Customize QuickShape	自定义快速形状
+Customize assisted drawing	自定义辅助绘图
+Customize clear layer	自定义清除图层
+Customize copy & paste	自定义复制粘贴
+Customize erase	自定义擦除
+Customize eyedropper	自定义吸管
+Customize full screen	自定义全屏
+Customize hover	自定义悬停
+Customize layer select	自定义图层选择
+Customize smudge	自定义涂抹
+Cut the layer	剪切图层
+Deselect	取消选择
+Disable undo and redo gestures	关闭撤销和重做手势
+Display P3	Display P3 色域
+Draw and hold	绘制并按住
+Duplicate the layer	复制图层
+Edit Text	编辑文本
+Eyedropper: the next touch picks a colour	吸管：下一次触摸会取色
+Files	文件
+Fill Layer	填充图层
+Flatten	拼合
+Four-finger tap	四指轻点
+Frame	边框
+Full Screen	全屏
+General	通用
+Grey view, to check values	灰度视图，用来检查明暗值
+Hide Texture Set	隐藏纹理集
+Hide layer	隐藏图层
+Hide or show the interface	隐藏或显示界面
+Lock Layer Group	锁定图层组
+Lock Texture Set	锁定纹理集
+Lock layer	锁定图层
+Mask	蒙版
+Merge Down	合并向下
+Merge Mask	合并蒙版
+Move the canvas with one finger	单指移动画布
+One finger drags the canvas instead of painting; the pen still paints	单指拖动会移动画布而不是绘画，触控笔仍然可以绘制
+One finger paints as the pen does	单指也能像触控笔一样绘画
+Painting with a finger	用手指绘画
+Panels	面板
+Paper	纸张
+Pausing at the end of a stroke turns it into a shape	在描边末端稍作停顿，就会变成形状
+Pen	触控笔
+Pen button	触控笔按键
+Pen second button	触控笔第二按键
+Perspective guide on or off	打开或关闭透视参考线
+Rotate with pinch zoom	捏合缩放时旋转
+Scrub	拖动
+Selection	选区
+Show Texture Set	显示纹理集
+Show layer	显示图层
+Solo visibility off	单独可见性关
+Solo visibility on	单独可见性开
+Swap the colours	交换颜色
+Tap □	轻点 □
+The interface steps aside while you paint	绘画时界面会退到一旁
+Three-finger swipe	三指滑动
+Toggle visibility	切换可见性
+Tools	工具
+Touch	触摸
+Touch and hold	按住
+Transform	变换
+Transforming: move it a pixel	变换中：移动一个像素
+Two fingers turn the canvas as they zoom it	双指缩放画布时会同时旋转
+Two- and three-finger taps leave the history alone	双指和三指轻点不会改动历史
+Ungroup	取消编组
+Unlock Layer Group	解锁图层组
+Unlock Texture Set	解锁纹理集
+Unlock layer	解锁图层
+View	视图
+While the pen hovers, drag a finger for opacity and pinch for size	触控笔悬停时，拖动手指调节不透明度，捏合调节大小
+□ + Pen	□ + 触控笔
+□ + Touch	□ + 触摸

@@ -1,0 +1,4312 @@
+{
+" {unit}": [
+"custom_canvas.rs"
+],
+"+faststart": [
+"video.rs"
+],
+"-{typed}": [
+"transform_numeric.rs"
+],
+"/dev/dri/renderD128": [
+"video.rs"
+],
+"2D Grid": [
+"guide_editor.rs"
+],
+"30 Seconds": [
+"timelapse.rs"
+],
+"3D Materials": [
+"studio.rs"
+],
+"3D grain behaviour": [
+"studio.rs"
+],
+"3D preview": [
+"studio.rs"
+],
+"3d preview": [
+"studio.rs"
+],
+"A finger paints a model; with □ held it turns it": [
+"crates/core/src/gestures.rs"
+],
+"A fitted canvas keeps clear of the top bar and the sidebar.": [
+"settings.rs"
+],
+"A floating bar of undo, redo, zoom, move and fit for one finger.": [
+"settings.rs"
+],
+"A locked layer can’t be deleted. Unlock it first.": [
+"layers.rs"
+],
+"A message names the colour once it stops changing.": [
+"settings.rs"
+],
+"A model can have four lights at most.": [
+"lighting.rs"
+],
+"A tap lands where the finger first touched, even if it drifts before lifting.": [
+"settings.rs"
+],
+"ABC": [
+"colours.rs"
+],
+"About ProCraft": [
+"actions.rs"
+],
+"About this artwork": [
+"canvas_info.rs"
+],
+"About this brush": [
+"studio.rs"
+],
+"Accessibility": [
+"settings.rs"
+],
+"Actions": [
+"actions.rs"
+],
+"Active color": [
+"actions.rs",
+"studio.rs"
+],
+"Active palette": [
+"colours.rs"
+],
+"Actual size": [
+"crates/core/src/quick_menu.rs"
+],
+"Add": [
+"actions.rs",
+"selection.rs"
+],
+"Add Frame": [
+"animation.rs"
+],
+"Add Light": [
+"lighting.rs"
+],
+"Add Text": [
+"crates/core/src/quick_menu.rs"
+],
+"Add text": [
+"actions.rs"
+],
+"Additive": [
+"adjust_panels.rs"
+],
+"Adjust": [
+"liquify.rs"
+],
+"Adjustment applied": [
+"ui.rs"
+],
+"Adjustments": [
+"adjustments.rs",
+"quick_menu.rs"
+],
+"Advanced Mesh": [
+"transform.rs"
+],
+"Advanced cursor": [
+"actions.rs"
+],
+"Advanced cursor settings": [
+"actions.rs"
+],
+"Advanced settings": [
+"actions.rs"
+],
+"All": [
+"studio.rs"
+],
+"Alpha Lock": [
+"crates/core/src/quick_menu.rs"
+],
+"Alpha Lock is on": [
+"ui.rs"
+],
+"Alpha Lock off": [
+"crates/core/src/layers.rs"
+],
+"Alpha Lock on": [
+"crates/core/src/layers.rs"
+],
+"Alpha Threshold": [
+"studio.rs"
+],
+"Amount": [
+"adjust_panels.rs",
+"liquify.rs",
+"selection.rs",
+"studio.rs"
+],
+"Amplitude": [
+"adjust_panels.rs"
+],
+"An artwork opens zoomed and turned as it was left.": [
+"settings.rs"
+],
+"Analogous": [
+"colours.rs"
+],
+"Angle": [
+"transform_numeric.rs"
+],
+"Animated GIF": [
+"actions.rs",
+"animated_export.rs"
+],
+"Animated HEVC": [
+"actions.rs",
+"animated_export.rs"
+],
+"Animated MP4": [
+"actions.rs",
+"animated_export.rs"
+],
+"Animated PNG": [
+"actions.rs",
+"animated_export.rs"
+],
+"Animated rotate": [
+"animated_export.rs"
+],
+"Animated swing": [
+"animated_export.rs"
+],
+"Animation Assist": [
+"actions.rs"
+],
+"Animation duration": [
+"animated_export.rs"
+],
+"App Pressure Sensitivity": [
+"actions.rs"
+],
+"Apply": [
+"adjustments.rs"
+],
+"Arc": [
+"overlays.rs"
+],
+"Artifact": [
+"adjust_panels.rs"
+],
+"Assisted": [
+"layers.rs"
+],
+"Assisted Drawing": [
+"guide_editor.rs"
+],
+"Assisted Reference": [
+"layers.rs"
+],
+"Assisted layers": [
+"canvas_info.rs"
+],
+"Attack": [
+"studio.rs"
+],
+"Attributes": [
+"text.rs"
+],
+"Auditorium": [
+"lighting.rs"
+],
+"Auto repeat": [
+"source_editor.rs"
+],
+"Automatic": [
+"selection.rs"
+],
+"Automatic Full Screen": [
+"crates/core/src/gestures.rs"
+],
+"Available color profiles": [
+"canvas_info.rs"
+],
+"Azimuth": [
+"studio.rs"
+],
+"Azimuth and barrel roll": [
+"studio.rs"
+],
+"Background": [
+"animation.rs",
+"colours.rs"
+],
+"Background color": [
+"custom_canvas.rs",
+"layers.rs"
+],
+"Background hidden": [
+"custom_canvas.rs"
+],
+"Backspace": [
+"custom_canvas.rs",
+"guide_editor.rs"
+],
+"Barrel roll": [
+"studio.rs"
+],
+"Baseline": [
+"text.rs"
+],
+"Beach": [
+"lighting.rs"
+],
+"Best": [
+"alert.rs"
+],
+"Better": [
+"alert.rs"
+],
+"Bicubic": [
+"transform.rs"
+],
+"Bilinear": [
+"transform.rs"
+],
+"Billows": [
+"adjust_panels.rs"
+],
+"Bleed": [
+"studio.rs"
+],
+"Blend mode": [
+"studio.rs"
+],
+"Blend primary frame": [
+"animation.rs"
+],
+"Blending": [
+"studio.rs"
+],
+"Block Size": [
+"adjust_panels.rs"
+],
+"Bloom": [
+"crates/core/src/adjust_menu.rs"
+],
+"Blue": [
+"adjust_panels.rs"
+],
+"Blue shift": [
+"adjust_panels.rs"
+],
+"Blunt": [
+"studio.rs"
+],
+"Blur": [
+"adjust_panels.rs",
+"studio.rs"
+],
+"Blur jitter": [
+"studio.rs"
+],
+"Border overlap": [
+"source_editor.rs"
+],
+"Brightness": [
+"adjustments.rs",
+"studio.rs"
+],
+"Brush": [
+"library.rs"
+],
+"Brush Set": [
+"quick_menu.rs"
+],
+"Brush Studio": [
+"studio.rs"
+],
+"Brush behavior": [
+"studio.rs"
+],
+"Brush cursor": [
+"actions.rs"
+],
+"Brush cursor visibility": [
+"actions.rs"
+],
+"Brush library": [
+"library.rs"
+],
+"Brush outline style": [
+"actions.rs"
+],
+"Brush properties": [
+"studio.rs"
+],
+"Brush scaling": [
+"actions.rs"
+],
+"Brush set": [
+"library.rs"
+],
+"Brush size": [
+"crates/core/src/keys.rs"
+],
+"Brushes": [
+"library.rs",
+"quick_menu.rs"
+],
+"Brushes added to the library.": [
+"ui.rs"
+],
+"Burn": [
+"adjust_panels.rs"
+],
+"Burnt edges": [
+"studio.rs"
+],
+"Burnt edges mode": [
+"studio.rs"
+],
+"C-unwind": [
+"finder.rs"
+],
+"CMYK": [
+"custom_canvas.rs"
+],
+"Can't export": [
+"animated_export.rs",
+"timelapse.rs"
+],
+"Can't import it": [
+"reference.rs",
+"source_editor.rs"
+],
+"Can't import this plugin": [
+"ui.rs"
+],
+"Can't insert it": [
+"ui.rs"
+],
+"Can't keep the artwork": [
+"app.rs"
+],
+"Can't open the artwork": [
+"app.rs"
+],
+"Can't open the picture": [
+"app.rs"
+],
+"Can't paste": [
+"source_editor.rs"
+],
+"Can't save": [
+"ui.rs"
+],
+"Cancel": [
+"adjustments.rs",
+"alert.rs",
+"animated_export.rs",
+"canvas_info.rs",
+"crop.rs",
+"custom_canvas.rs",
+"export_card.rs",
+"guide_editor.rs",
+"lighting.rs",
+"model_picture.rs",
+"source_editor.rs",
+"studio.rs",
+"text.rs"
+],
+"Canvas": [
+"actions.rs",
+"reference.rs"
+],
+"Canvas Info": [
+"canvas_info.rs"
+],
+"Canvas Orientation Memory": [
+"settings.rs"
+],
+"Canvas copied": [
+"ui.rs"
+],
+"Canvas information": [
+"actions.rs"
+],
+"Canvas properties": [
+"custom_canvas.rs"
+],
+"Cards": [
+"colours.rs"
+],
+"Centimeters": [
+"custom_canvas.rs",
+"guide_editor.rs"
+],
+"Change": [
+"canvas_info.rs"
+],
+"Change color profile?": [
+"canvas_info.rs"
+],
+"Channel": [
+"adjust_panels.rs"
+],
+"Charge": [
+"studio.rs"
+],
+"Chromatic Aberration": [
+"crates/core/src/adjust_menu.rs"
+],
+"Circle": [
+"overlays.rs"
+],
+"City": [
+"lighting.rs"
+],
+"Classic": [
+"colours.rs"
+],
+"Classic Normal Combine mode": [
+"studio.rs"
+],
+"Classic filtering": [
+"studio.rs"
+],
+"Classic taper": [
+"studio.rs"
+],
+"Clear": [
+"colours.rs",
+"layers.rs",
+"library.rs",
+"reference.rs",
+"selection.rs"
+],
+"Clear Layer": [
+"crates/core/src/gestures.rs"
+],
+"Clear drawing pad": [
+"studio.rs"
+],
+"Clear history": [
+"colours.rs"
+],
+"Clear layer": [
+"crates/core/src/quick_menu.rs"
+],
+"Clear the layer": [
+"crates/core/src/keys.rs"
+],
+"Clipboard": [
+"crates/core/src/quick_menu.rs"
+],
+"Clipping Mask": [
+"crates/core/src/layers.rs"
+],
+"Clipping layers": [
+"canvas_info.rs"
+],
+"Clone": [
+"crates/core/src/adjust_menu.rs"
+],
+"Clouds": [
+"adjust_panels.rs"
+],
+"Coast": [
+"lighting.rs"
+],
+"Color": [
+"layers.rs"
+],
+"Color Balance": [
+"adjust_panels.rs"
+],
+"Color Description Notifications": [
+"settings.rs"
+],
+"Color Fill": [
+"selection.rs"
+],
+"Color barrel roll": [
+"studio.rs"
+],
+"Color dynamics": [
+"studio.rs"
+],
+"Color history": [
+"colours.rs"
+],
+"Color pressure": [
+"studio.rs"
+],
+"Color profile": [
+"canvas_info.rs",
+"custom_canvas.rs"
+],
+"Color tilt": [
+"studio.rs"
+],
+"ColorDrop": [
+"colour_drop.rs"
+],
+"Colors": [
+"animation.rs",
+"colours.rs",
+"compact_colours.rs"
+],
+"Colours": [
+"crates/core/src/keys.rs"
+],
+"Combine": [
+"library.rs"
+],
+"Combine Down": [
+"crates/core/src/layers.rs"
+],
+"Combine Mode": [
+"studio.rs"
+],
+"Comic": [
+"crates/core/src/presets.rs"
+],
+"Compact": [
+"colours.rs"
+],
+"Complementary": [
+"colours.rs"
+],
+"Continue filling": [
+"colour_drop.rs"
+],
+"Contrast": [
+"studio.rs"
+],
+"Copy": [
+"actions.rs",
+"copy_paste.rs"
+],
+"Copy & Paste": [
+"copy_paste.rs",
+"selection.rs"
+],
+"Copy All": [
+"copy_paste.rs"
+],
+"Copy canvas": [
+"actions.rs"
+],
+"Copy the canvas": [
+"crates/core/src/keys.rs"
+],
+"Copy the layer": [
+"crates/core/src/keys.rs"
+],
+"Count": [
+"studio.rs"
+],
+"Count jitter": [
+"studio.rs"
+],
+"Create new brush": [
+"library.rs"
+],
+"Create new palette": [
+"colours.rs"
+],
+"Create new reset point": [
+"studio.rs"
+],
+"Create new set": [
+"library.rs"
+],
+"Crop & Resize": [
+"actions.rs"
+],
+"Crop and Resize": [
+"crop.rs"
+],
+"Cropped": [
+"studio.rs"
+],
+"Crystals": [
+"liquify.rs"
+],
+"Current color profile": [
+"canvas_info.rs"
+],
+"Cursor outline": [
+"studio.rs"
+],
+"Curves": [
+"crates/core/src/adjust_menu.rs"
+],
+"Custom Canvas": [
+"custom_canvas.rs"
+],
+"Customize QuickMenu": [
+"crates/core/src/gestures.rs"
+],
+"Customize QuickShape": [
+"crates/core/src/gestures.rs"
+],
+"Customize assisted drawing": [
+"crates/core/src/gestures.rs"
+],
+"Customize clear layer": [
+"crates/core/src/gestures.rs"
+],
+"Customize copy & paste": [
+"crates/core/src/gestures.rs"
+],
+"Customize erase": [
+"crates/core/src/gestures.rs"
+],
+"Customize eyedropper": [
+"crates/core/src/gestures.rs"
+],
+"Customize full screen": [
+"crates/core/src/gestures.rs"
+],
+"Customize hover": [
+"crates/core/src/gestures.rs"
+],
+"Customize icon": [
+"library.rs"
+],
+"Customize layer select": [
+"crates/core/src/gestures.rs"
+],
+"Customize smudge": [
+"crates/core/src/gestures.rs"
+],
+"Cut": [
+"actions.rs",
+"copy_paste.rs"
+],
+"Cut & Paste": [
+"copy_paste.rs"
+],
+"Cut the layer": [
+"crates/core/src/keys.rs"
+],
+"Cyan": [
+"adjust_panels.rs"
+],
+"DEF": [
+"colours.rs"
+],
+"DPI": [
+"canvas_info.rs",
+"crop.rs",
+"custom_canvas.rs"
+],
+"Darken": [
+"layers.rs"
+],
+"Darkness": [
+"studio.rs"
+],
+"Date created": [
+"canvas_info.rs"
+],
+"Date modified": [
+"canvas_info.rs"
+],
+"Daytime": [
+"lighting.rs"
+],
+"Delay": [
+"gesture_controls.rs"
+],
+"Delete": [
+"adjust_panels.rs",
+"animation.rs",
+"colours.rs",
+"curve.rs",
+"gallery.rs",
+"gradient_map.rs",
+"layers.rs",
+"library.rs",
+"lighting.rs",
+"quick_menu.rs"
+],
+"Delete 1 artwork?": [
+"gallery.rs"
+],
+"Delete \\u{201c}{}\\u{201d}?": [
+"gallery.rs"
+],
+"Delete layer": [
+"crates/core/src/quick_menu.rs"
+],
+"Delete shared layer?": [
+"layers.rs"
+],
+"Delete these brushes?": [
+"library.rs"
+],
+"Delete these layers?": [
+"layers.rs"
+],
+"Delete this brush?": [
+"library.rs"
+],
+"Delete this set and its brushes?": [
+"library.rs"
+],
+"Delete {n} artworks?": [
+"gallery.rs"
+],
+"Depth": [
+"studio.rs"
+],
+"Depth jitter": [
+"studio.rs"
+],
+"Depth minimum": [
+"studio.rs"
+],
+"Deselect": [
+"crates/core/src/keys.rs"
+],
+"Design": [
+"text.rs"
+],
+"Dilution": [
+"studio.rs"
+],
+"Dimensions": [
+"canvas_info.rs",
+"custom_canvas.rs",
+"transform_numeric.rs"
+],
+"Directional": [
+"adjust_panels.rs"
+],
+"Disable Time-lapse": [
+"settings.rs"
+],
+"Disable undo and redo gestures": [
+"crates/core/src/gestures.rs"
+],
+"Disabled": [
+"studio.rs"
+],
+"Disc": [
+"colours.rs"
+],
+"Displace": [
+"adjust_panels.rs"
+],
+"Display P3": [
+"crates/core/src/presets.rs"
+],
+"Distance": [
+"transform.rs"
+],
+"Distort": [
+"transform.rs"
+],
+"Distortion": [
+"liquify.rs"
+],
+"Dithering": [
+"animated_export.rs"
+],
+"Diverge": [
+"adjust_panels.rs"
+],
+"Divide": [
+"layers.rs"
+],
+"Don't Purge": [
+"timelapse.rs"
+],
+"Don't change": [
+"canvas_info.rs"
+],
+"Done": [
+"custom_canvas.rs",
+"guide_editor.rs",
+"licences.rs",
+"model_picture.rs",
+"settings.rs",
+"shortcuts.rs"
+],
+"Drag and Drop export": [
+"settings.rs"
+],
+"Draw and hold": [
+"crates/core/src/gestures.rs"
+],
+"Drawing Assist": [
+"crates/core/src/quick_menu.rs"
+],
+"Drawing Guide": [
+"actions.rs"
+],
+"Drawing Guides": [
+"guide_editor.rs"
+],
+"Drawing Pad": [
+"studio.rs"
+],
+"Duplicate": [
+"animation.rs",
+"colours.rs",
+"copy_paste.rs",
+"gallery.rs",
+"gradient_map.rs",
+"layers.rs",
+"library.rs",
+"lighting.rs"
+],
+"Duplicate layer": [
+"crates/core/src/quick_menu.rs"
+],
+"Duplicate the layer": [
+"crates/core/src/keys.rs"
+],
+"Dynamics": [
+"studio.rs"
+],
+"Ease": [
+"animated_export.rs"
+],
+"Edge": [
+"liquify.rs"
+],
+"Edit": [
+"gallery.rs",
+"studio.rs"
+],
+"Edit Drawing Guide": [
+"actions.rs"
+],
+"Edit Text": [
+"crates/core/src/layers.rs"
+],
+"Edit lighting & environment": [
+"actions.rs"
+],
+"Edit style": [
+"text.rs"
+],
+"Editing": [
+"overlays.rs"
+],
+"Ellipse": [
+"overlays.rs",
+"selection.rs"
+],
+"Environment": [
+"lighting.rs"
+],
+"Equilateral": [
+"overlays.rs"
+],
+"Erase": [
+"crates/core/src/quick_menu.rs"
+],
+"Erase library": [
+"library.rs"
+],
+"Erasing": [
+"ui.rs"
+],
+"Estimated pressure": [
+"studio.rs"
+],
+"Every gesture goes back to how the app starts out.": [
+"gesture_controls.rs"
+],
+"Expand": [
+"liquify.rs"
+],
+"Export": [
+"animated_export.rs"
+],
+"Export time-lapse video": [
+"actions.rs",
+"timelapse.rs"
+],
+"Exporting": [
+"export_card.rs"
+],
+"Exporting…": [
+"app.rs"
+],
+"Exposure": [
+"lighting.rs"
+],
+"Expression": [
+"studio.rs"
+],
+"Eyedropper": [
+"crates/core/src/quick_menu.rs"
+],
+"Eyedropper: the next touch picks a colour": [
+"crates/core/src/keys.rs"
+],
+"Fall off": [
+"adjust_panels.rs",
+"studio.rs"
+],
+"Feather": [
+"selection.rs"
+],
+"Feedback Sounds": [
+"settings.rs"
+],
+"Files": [
+"crates/core/src/keys.rs"
+],
+"Fill Layer": [
+"crates/core/src/layers.rs"
+],
+"Fill layer": [
+"crates/core/src/quick_menu.rs"
+],
+"Find": [
+"library.rs"
+],
+"Finishing the fill…": [
+"app.rs"
+],
+"Fit Canvas": [
+"companion.rs"
+],
+"Fit Canvas Inside Interface": [
+"settings.rs"
+],
+"Fit canvas": [
+"crates/core/src/quick_menu.rs"
+],
+"Fit to Canvas": [
+"transform.rs"
+],
+"Flatten": [
+"crates/core/src/layers.rs"
+],
+"Flip Horizontal": [
+"model_picture.rs",
+"transform.rs"
+],
+"Flip Vertical": [
+"model_picture.rs",
+"transform.rs"
+],
+"Flip X": [
+"studio.rs"
+],
+"Flip Y": [
+"studio.rs"
+],
+"Flip horizontal": [
+"actions.rs"
+],
+"Flip horizontally": [
+"crates/core/src/quick_menu.rs"
+],
+"Flip vertical": [
+"actions.rs"
+],
+"Flip vertically": [
+"crates/core/src/quick_menu.rs"
+],
+"Flood": [
+"adjust_panels.rs"
+],
+"Flow": [
+"studio.rs"
+],
+"Follow size": [
+"studio.rs"
+],
+"Follow stroke": [
+"studio.rs"
+],
+"Font": [
+"text.rs"
+],
+"Font imported": [
+"text.rs"
+],
+"Fonts": [
+"text.rs"
+],
+"Fonts imported": [
+"text.rs"
+],
+"Foreground": [
+"animation.rs"
+],
+"Four-finger tap": [
+"crates/core/src/gestures.rs"
+],
+"Frame": [
+"crates/core/src/layers.rs"
+],
+"Frame options": [
+"animation.rs"
+],
+"Frames Per Second": [
+"animation.rs"
+],
+"Frames per second": [
+"animated_export.rs"
+],
+"Frames saved to timeline": [
+"ui.rs"
+],
+"Freeform": [
+"transform.rs"
+],
+"Freehand": [
+"selection.rs"
+],
+"Frequency": [
+"adjust_panels.rs"
+],
+"Full Color": [
+"adjust_panels.rs"
+],
+"Full Screen": [
+"crates/core/src/gestures.rs"
+],
+"Full length": [
+"timelapse.rs"
+],
+"Full screen": [
+"crates/core/src/quick_menu.rs"
+],
+"Gallery": [
+"chrome.rs"
+],
+"Gamma": [
+"adjust_panels.rs"
+],
+"Gaussian Blur": [
+"crates/core/src/adjust_menu.rs"
+],
+"General": [
+"crates/core/src/gestures.rs"
+],
+"Gesture controls": [
+"actions.rs",
+"gesture_controls.rs"
+],
+"Getting the canvas ready…": [
+"app.rs"
+],
+"Glitch": [
+"crates/core/src/adjust_menu.rs"
+],
+"Glossy": [
+"studio.rs"
+],
+"Good": [
+"alert.rs"
+],
+"Good quality": [
+"custom_canvas.rs"
+],
+"Gradation": [
+"studio.rs"
+],
+"Grade": [
+"studio.rs"
+],
+"Gradient Library": [
+"gradient_map.rs"
+],
+"Gradient Map": [
+"gradient_map.rs"
+],
+"Grain": [
+"studio.rs"
+],
+"Grain Editor": [
+"source_editor.rs"
+],
+"Grain Source": [
+"source_editor.rs",
+"studio.rs"
+],
+"Grain behavior": [
+"studio.rs"
+],
+"Grain filtering": [
+"studio.rs"
+],
+"Grain follows camera": [
+"studio.rs"
+],
+"Grain scale": [
+"source_editor.rs"
+],
+"Green": [
+"adjust_panels.rs"
+],
+"Green shift": [
+"adjust_panels.rs"
+],
+"Grey view, to check values": [
+"crates/core/src/keys.rs"
+],
+"Grid size": [
+"guide_editor.rs"
+],
+"Group": [
+"layers.rs"
+],
+"Group is empty": [
+"ui.rs"
+],
+"Group is hidden": [
+"ui.rs"
+],
+"Group is selected": [
+"ui.rs"
+],
+"Guide Options": [
+"guide_editor.rs"
+],
+"HEVC": [
+"custom_canvas.rs"
+],
+"HLS": [
+"colour_models.rs"
+],
+"HSB": [
+"colour_models.rs",
+"compact_colours.rs"
+],
+"HSY\\u{2032}": [
+"colour_models.rs"
+],
+"Halftone": [
+"crates/core/src/adjust_menu.rs"
+],
+"Hard": [
+"source_editor.rs"
+],
+"Harmony": [
+"colours.rs"
+],
+"Heavy Glaze": [
+"studio.rs"
+],
+"Height": [
+"custom_canvas.rs"
+],
+"Help": [
+"actions.rs"
+],
+"Hexadecimal": [
+"colours.rs"
+],
+"Hide Submesh": [
+"layers.rs"
+],
+"Hide Texture Set": [
+"crates/core/src/scene3d.rs"
+],
+"Hide layer": [
+"crates/core/src/layers.rs"
+],
+"Hide or show the interface": [
+"crates/core/src/keys.rs"
+],
+"High contrast": [
+"actions.rs"
+],
+"Highlights": [
+"adjust_panels.rs"
+],
+"History": [
+"colours.rs"
+],
+"Hold duration": [
+"animation.rs"
+],
+"Horizontal": [
+"guide_editor.rs"
+],
+"Hover": [
+"studio.rs"
+],
+"Hover fill": [
+"studio.rs"
+],
+"How far the pen moves before a brush's speed dynamics count it as fast.": [
+"settings.rs"
+],
+"Hue": [
+"adjustments.rs",
+"lighting.rs",
+"studio.rs"
+],
+"Hue, Saturation, Brightness": [
+"crates/core/src/adjust_menu.rs"
+],
+"Image": [
+"reference.rs"
+],
+"Image Format": [
+"gallery.rs"
+],
+"Image source options": [
+"source_editor.rs"
+],
+"Import": [
+"actions.rs",
+"canvas_info.rs",
+"custom_canvas.rs",
+"gallery.rs",
+"reference.rs",
+"source_editor.rs",
+"text.rs",
+"ui.rs"
+],
+"Import Image": [
+"reference.rs"
+],
+"Import a file": [
+"source_editor.rs"
+],
+"Import a photo": [
+"source_editor.rs"
+],
+"Import brushes": [
+"library.rs"
+],
+"Import fonts": [
+"text.rs"
+],
+"Import from Files": [
+"library.rs"
+],
+"Improved filtering": [
+"studio.rs"
+],
+"Inches": [
+"custom_canvas.rs",
+"guide_editor.rs"
+],
+"Industrial": [
+"lighting.rs"
+],
+"Input style": [
+"studio.rs"
+],
+"Insert a file": [
+"actions.rs",
+"ui.rs"
+],
+"Insert a photo": [
+"actions.rs",
+"ui.rs"
+],
+"Insert a private file": [
+"actions.rs"
+],
+"Insert a private photo": [
+"actions.rs"
+],
+"Intense Blending": [
+"studio.rs"
+],
+"Intense Glaze": [
+"studio.rs"
+],
+"Intensity": [
+"lighting.rs"
+],
+"Interpolation": [
+"transform.rs"
+],
+"Invert": [
+"selection.rs"
+],
+"Isometric": [
+"guide_editor.rs"
+],
+"Isometric Guide visibility": [
+"crates/core/src/quick_menu.rs"
+],
+"It can't be brought back.": [
+"library.rs"
+],
+"Its colours keep their values and look as the new profile shows them, in the time-lapse recording too.": [
+"canvas_info.rs"
+],
+"Its text can't be edited afterwards; you can paint on it.": [
+"text.rs"
+],
+"JPEG": [
+"actions.rs",
+"prefs.rs"
+],
+"Jitter": [
+"studio.rs"
+],
+"Jitter Lateral": [
+"studio.rs"
+],
+"Jitter Linear": [
+"studio.rs"
+],
+"Kerning": [
+"text.rs"
+],
+"Keyboard shortcuts": [
+"actions.rs",
+"shortcuts.rs"
+],
+"Language": [
+"settings.rs"
+],
+"Last reset point: {day}": [
+"studio.rs"
+],
+"Layer": [
+"adjustments.rs"
+],
+"Layer Select": [
+"crates/core/src/quick_menu.rs"
+],
+"Layer cleared": [
+"ui.rs"
+],
+"Layer copied": [
+"ui.rs"
+],
+"Layer cut": [
+"ui.rs"
+],
+"Layer groups": [
+"canvas_info.rs"
+],
+"Layer is hidden": [
+"ui.rs"
+],
+"Layer is locked": [
+"ui.rs"
+],
+"Layer masks": [
+"canvas_info.rs"
+],
+"Layer opacity": [
+"crates/core/src/quick_menu.rs"
+],
+"Layer visibility": [
+"crates/core/src/quick_menu.rs"
+],
+"Layers": [
+"canvas_info.rs",
+"layers.rs"
+],
+"Layers available": [
+"canvas_info.rs"
+],
+"Layers used": [
+"canvas_info.rs"
+],
+"Leading": [
+"text.rs"
+],
+"Length": [
+"guide_editor.rs"
+],
+"Licences": [
+"actions.rs",
+"licences.rs"
+],
+"Licenses": [
+"settings.rs"
+],
+"Light Glaze": [
+"studio.rs"
+],
+"Light Settings": [
+"lighting.rs"
+],
+"Light interface": [
+"actions.rs"
+],
+"Lighten": [
+"layers.rs"
+],
+"Lighting Studio": [
+"lighting.rs"
+],
+"Lightness": [
+"studio.rs"
+],
+"Line": [
+"overlays.rs"
+],
+"Link tip sizes": [
+"studio.rs"
+],
+"Liquify": [
+"crates/core/src/adjust_menu.rs"
+],
+"Liquify Mode": [
+"liquify.rs"
+],
+"Lock": [
+"layers.rs"
+],
+"Lock Layer Group": [
+"crates/core/src/layers.rs"
+],
+"Lock Texture Set": [
+"crates/core/src/scene3d.rs"
+],
+"Lock layer": [
+"crates/core/src/layers.rs"
+],
+"Lock mesh": [
+"layers.rs"
+],
+"Locked layer selection": [
+"layers.rs"
+],
+"Loop": [
+"animation.rs"
+],
+"Lossless": [
+"custom_canvas.rs"
+],
+"Low quality": [
+"custom_canvas.rs"
+],
+"Luminance blending": [
+"studio.rs"
+],
+"MP4 video": [
+"timelapse.rs"
+],
+"Made by ": [
+"canvas_info.rs"
+],
+"Made by {}": [
+"studio.rs"
+],
+"Magenta": [
+"adjust_panels.rs"
+],
+"Magnetics": [
+"transform.rs"
+],
+"Making and opening videos needs ffmpeg: install it from your system's packages.": [
+"video.rs"
+],
+"Mask": [
+"crates/core/src/layers.rs"
+],
+"Mask hardness": [
+"source_editor.rs"
+],
+"Materials": [
+"studio.rs"
+],
+"Matte": [
+"studio.rs"
+],
+"Max": [
+"adjust_panels.rs",
+"animation.rs",
+"layers.rs",
+"lighting.rs",
+"liquify.rs",
+"studio.rs",
+"transform.rs"
+],
+"Max Resolution": [
+"animated_export.rs"
+],
+"Maximal": [
+"source_editor.rs"
+],
+"Maximum Layers": [
+"custom_canvas.rs"
+],
+"Maximum Speed Distance": [
+"settings.rs"
+],
+"Maximum layers": [
+"canvas_info.rs"
+],
+"Maximum opacity": [
+"studio.rs"
+],
+"Maximum size": [
+"studio.rs"
+],
+"Medium": [
+"text.rs"
+],
+"MemTotal:": [
+"app.rs"
+],
+"Merge": [
+"layers.rs"
+],
+"Merge Down": [
+"crates/core/src/layers.rs"
+],
+"Merge Mask": [
+"crates/core/src/layers.rs"
+],
+"Merge down": [
+"crates/core/src/quick_menu.rs"
+],
+"Mesh is hidden": [
+"ui.rs"
+],
+"Mesh is locked": [
+"ui.rs"
+],
+"Metallic": [
+"layers.rs",
+"studio.rs"
+],
+"Metallic Editor": [
+"source_editor.rs"
+],
+"Metallic Source": [
+"studio.rs"
+],
+"Midtones": [
+"adjust_panels.rs"
+],
+"Millimeters": [
+"custom_canvas.rs",
+"guide_editor.rs"
+],
+"Min": [
+"lighting.rs"
+],
+"Minimum opacity": [
+"studio.rs"
+],
+"Minimum size": [
+"studio.rs"
+],
+"Mirror overlap": [
+"source_editor.rs"
+],
+"Momentum": [
+"liquify.rs"
+],
+"More": [
+"gallery.rs"
+],
+"More Options": [
+"gallery.rs"
+],
+"Motion Blur": [
+"crates/core/src/adjust_menu.rs"
+],
+"Motion Filtering": [
+"actions.rs"
+],
+"Motion Filtering Expression": [
+"actions.rs"
+],
+"Motion filtering": [
+"studio.rs"
+],
+"Mountain": [
+"lighting.rs"
+],
+"Move": [
+"companion.rs"
+],
+"Move the canvas with one finger": [
+"crates/core/src/gestures.rs"
+],
+"Movement": [
+"studio.rs"
+],
+"Moving": [
+"studio.rs"
+],
+"Multi": [
+"adjust_panels.rs"
+],
+"Name": [
+"canvas_info.rs"
+],
+"Nearest": [
+"transform.rs"
+],
+"Nearest Neighbor": [
+"transform.rs"
+],
+"New Page": [
+"animation.rs"
+],
+"New artworks don't record their time-lapse.": [
+"settings.rs"
+],
+"New canvas": [
+"gallery.rs"
+],
+"New from file": [
+"colours.rs"
+],
+"New from photos": [
+"colours.rs"
+],
+"New layer": [
+"crates/core/src/quick_menu.rs"
+],
+"New palette from a file": [
+"colours.rs"
+],
+"New palette from a picture": [
+"colours.rs"
+],
+"Newspaper": [
+"adjust_panels.rs"
+],
+"Next": [
+"custom_canvas.rs"
+],
+"Next frame": [
+"crates/core/src/quick_menu.rs"
+],
+"Nightlife": [
+"lighting.rs"
+],
+"No Action": [
+"crates/core/src/quick_menu.rs"
+],
+"No filtering": [
+"studio.rs"
+],
+"No results": [
+"library.rs"
+],
+"Noise": [
+"crates/core/src/adjust_menu.rs"
+],
+"Non-Metallic": [
+"studio.rs"
+],
+"None": [
+"actions.rs",
+"adjust_panels.rs",
+"animation.rs",
+"lighting.rs",
+"liquify.rs",
+"selection.rs",
+"source_editor.rs",
+"studio.rs",
+"transform.rs"
+],
+"Normal": [
+"studio.rs"
+],
+"Nothing imported yet. Import a .procraft-plugin file to add one.": [
+"actions.rs"
+],
+"Nothing is drawn there.": [
+"ui.rs"
+],
+"Nothing recorded yet": [
+"timelapse.rs"
+],
+"Now a plugin": [
+"ui.rs"
+],
+"OBJ": [
+"actions.rs"
+],
+"OKLab": [
+"colour_models.rs"
+],
+"OTC": [
+"text.rs"
+],
+"OTF": [
+"text.rs"
+],
+"Octaves": [
+"adjust_panels.rs"
+],
+"Offset jitter": [
+"studio.rs"
+],
+"One Shot": [
+"animation.rs"
+],
+"One finger drags the canvas instead of painting; the pen still paints": [
+"crates/core/src/gestures.rs"
+],
+"One finger paints as the pen does": [
+"crates/core/src/gestures.rs"
+],
+"Onion skin": [
+"crates/core/src/quick_menu.rs"
+],
+"Onion skin colors": [
+"animation.rs"
+],
+"Onion skin frames": [
+"animation.rs"
+],
+"Onion skin opacity": [
+"animation.rs"
+],
+"Opacity": [
+"adjustments.rs",
+"chrome.rs",
+"guide_editor.rs",
+"layers.rs",
+"studio.rs",
+"text.rs"
+],
+"Open Adjustments": [
+"crates/core/src/quick_menu.rs"
+],
+"Open Color panel": [
+"crates/core/src/quick_menu.rs"
+],
+"Open Layers": [
+"ui.rs"
+],
+"Open Layers panel": [
+"crates/core/src/quick_menu.rs"
+],
+"Opening a PDF needs pdftoppm: install poppler-utils from your system's packages.": [
+"pdf.rs"
+],
+"Opening…": [
+"app.rs"
+],
+"Options": [
+"guide_editor.rs"
+],
+"Orient to screen": [
+"studio.rs"
+],
+"PDF": [
+"actions.rs"
+],
+"PDF quality": [
+"alert.rs"
+],
+"PNG": [
+"actions.rs",
+"prefs.rs"
+],
+"PNG Files": [
+"actions.rs"
+],
+"PSD": [
+"actions.rs",
+"prefs.rs"
+],
+"Page": [
+"pdf.rs"
+],
+"Page Assist": [
+"actions.rs",
+"animation.rs"
+],
+"Page options": [
+"animation.rs"
+],
+"Pages:": [
+"pdf.rs"
+],
+"Paint": [
+"crates/core/src/quick_menu.rs"
+],
+"Paint through mesh": [
+"actions.rs"
+],
+"Painting": [
+"ui.rs"
+],
+"Painting on this model may not go as expected because of:\\n{}": [
+"ui.rs"
+],
+"Painting with a finger": [
+"crates/core/src/gestures.rs"
+],
+"Palette": [
+"colours.rs"
+],
+"Palette added.": [
+"app.rs"
+],
+"Palettes": [
+"colours.rs"
+],
+"Panels": [
+"crates/core/src/keys.rs"
+],
+"Paper": [
+"crates/core/src/presets.rs"
+],
+"Paste": [
+"actions.rs",
+"copy_paste.rs",
+"source_editor.rs"
+],
+"Paste Private": [
+"actions.rs"
+],
+"Pause": [
+"animation.rs"
+],
+"Pausing at the end of a stroke turns it into a shape": [
+"crates/core/src/gestures.rs"
+],
+"Pen": [
+"crates/core/src/gestures.rs"
+],
+"Pen button": [
+"crates/core/src/gestures.rs"
+],
+"Pen second button": [
+"crates/core/src/gestures.rs"
+],
+"Pencil": [
+"adjustments.rs"
+],
+"Per brush": [
+"actions.rs"
+],
+"Per frame color palette": [
+"animated_export.rs"
+],
+"Perspective": [
+"adjust_panels.rs",
+"guide_editor.rs"
+],
+"Perspective Blur": [
+"crates/core/src/adjust_menu.rs"
+],
+"Perspective Guide visibility": [
+"crates/core/src/quick_menu.rs"
+],
+"Perspective guide on or off": [
+"crates/core/src/keys.rs"
+],
+"Photo": [
+"canvas_info.rs",
+"gallery.rs"
+],
+"Physical height": [
+"canvas_info.rs"
+],
+"Physical width": [
+"canvas_info.rs"
+],
+"Picking color from canvas": [
+"overlays.rs"
+],
+"Picking color from reference": [
+"overlays.rs"
+],
+"Pictures": [
+"canvas_info.rs",
+"reference.rs",
+"source_editor.rs"
+],
+"Pictures and videos": [
+"ui.rs"
+],
+"Pin": [
+"library.rs"
+],
+"Pinch": [
+"liquify.rs"
+],
+"Ping-Pong": [
+"animation.rs"
+],
+"Pixel height": [
+"canvas_info.rs"
+],
+"Pixel width": [
+"canvas_info.rs"
+],
+"Pixels": [
+"custom_canvas.rs",
+"guide_editor.rs"
+],
+"Play": [
+"animation.rs"
+],
+"Plugin": [
+"crates/core/src/adjust_menu.rs"
+],
+"Plugins": [
+"actions.rs",
+"adjustments.rs"
+],
+"Polyline": [
+"overlays.rs"
+],
+"Portside": [
+"lighting.rs"
+],
+"Positional": [
+"adjust_panels.rs"
+],
+"Preferred file format": [
+"settings.rs"
+],
+"Preferred image format": [
+"settings.rs"
+],
+"Prefs": [
+"actions.rs"
+],
+"Pressure": [
+"liquify.rs",
+"studio.rs"
+],
+"Pressure & Smoothing": [
+"actions.rs"
+],
+"Pressure Minimum": [
+"studio.rs"
+],
+"Pressure Roundness": [
+"studio.rs"
+],
+"Pressure Scale": [
+"studio.rs"
+],
+"Pressure and Smoothing": [
+"actions.rs"
+],
+"Pressure taper": [
+"studio.rs"
+],
+"Preview": [
+"adjustments.rs",
+"gallery.rs",
+"studio.rs"
+],
+"Preview properties": [
+"studio.rs"
+],
+"Preview render": [
+"studio.rs"
+],
+"Preview size": [
+"studio.rs"
+],
+"Previous brush": [
+"crates/core/src/quick_menu.rs"
+],
+"Previous color": [
+"crates/core/src/quick_menu.rs"
+],
+"Previous colour": [
+"ui.rs"
+],
+"Previous frame": [
+"crates/core/src/quick_menu.rs"
+],
+"Primary": [
+"studio.rs"
+],
+"Private": [
+"layers.rs"
+],
+"ProCraft": [
+"actions.rs",
+"app.rs",
+"gallery.rs",
+"prefs.rs",
+"projection.rs",
+"settings.rs",
+"studio.rs"
+],
+"ProCraft starts again, with the artwork as it was last saved.": [
+"app.rs"
+],
+"Procreate": [
+"actions.rs"
+],
+"Project canvas": [
+"actions.rs"
+],
+"Properties": [
+"studio.rs"
+],
+"Pull": [
+"studio.rs"
+],
+"Purge": [
+"timelapse.rs"
+],
+"Purge Video?": [
+"timelapse.rs"
+],
+"Push": [
+"liquify.rs"
+],
+"Pyramid blending": [
+"source_editor.rs"
+],
+"Quadrant": [
+"guide_editor.rs"
+],
+"Quadrilateral": [
+"overlays.rs"
+],
+"QuickMenu": [
+"quick_menu.rs"
+],
+"QuickShape": [
+"crates/core/src/quick_menu.rs"
+],
+"QuickShape stroke": [
+"crates/core/src/quick_menu.rs"
+],
+"RGB": [
+"compact_colours.rs",
+"custom_canvas.rs"
+],
+"RIFF": [
+"sound.rs"
+],
+"Radial": [
+"guide_editor.rs"
+],
+"Randomized": [
+"studio.rs"
+],
+"Rapid undo delay": [
+"actions.rs"
+],
+"Rasterize": [
+"text.rs"
+],
+"Rasterize this text layer?": [
+"text.rs"
+],
+"Recent": [
+"library.rs"
+],
+"Recolor": [
+"crates/core/src/quick_menu.rs"
+],
+"Reconstruct": [
+"liquify.rs"
+],
+"Rectangle": [
+"overlays.rs",
+"selection.rs"
+],
+"Red": [
+"adjust_panels.rs"
+],
+"Red shift": [
+"adjust_panels.rs"
+],
+"Redo": [
+"companion.rs",
+"ui.rs"
+],
+"Redo {name}": [
+"ui.rs"
+],
+"Redo {n}": [
+"ui.rs"
+],
+"Reference": [
+"actions.rs",
+"layers.rs",
+"reference.rs"
+],
+"Regular": [
+"text.rs"
+],
+"Relative to canvas": [
+"actions.rs"
+],
+"Relative to screen": [
+"actions.rs"
+],
+"Relative to stroke": [
+"studio.rs"
+],
+"Remove": [
+"actions.rs",
+"selection.rs"
+],
+"Rename": [
+"library.rs"
+],
+"Rendering": [
+"studio.rs"
+],
+"Rendering mode": [
+"studio.rs"
+],
+"Replace Material Map Content": [
+"layers.rs"
+],
+"Resample canvas": [
+"crop.rs"
+],
+"Reset": [
+"adjustments.rs",
+"animation.rs",
+"crop.rs",
+"curve.rs",
+"gesture_controls.rs",
+"liquify.rs",
+"model_picture.rs",
+"transform.rs"
+],
+"Reset all": [
+"actions.rs"
+],
+"Reset all brush settings": [
+"studio.rs"
+],
+"Reset brush": [
+"studio.rs"
+],
+"Reset gesture controls?": [
+"gesture_controls.rs"
+],
+"Reset to defaults": [
+"gesture_controls.rs"
+],
+"Restore example palettes": [
+"colours.rs"
+],
+"Ridges": [
+"adjust_panels.rs"
+],
+"Right-hand interface": [
+"actions.rs"
+],
+"Rolling": [
+"studio.rs"
+],
+"Rotate": [
+"source_editor.rs"
+],
+"Rotate 45\\u{b0}": [
+"model_picture.rs",
+"transform.rs"
+],
+"Rotate with pinch zoom": [
+"crates/core/src/gestures.rs"
+],
+"Rotation": [
+"crop.rs",
+"studio.rs",
+"transform_numeric.rs"
+],
+"Rotational Symmetry": [
+"guide_editor.rs"
+],
+"Roughness": [
+"layers.rs",
+"studio.rs"
+],
+"Roughness Editor": [
+"source_editor.rs"
+],
+"Roughness Source": [
+"studio.rs"
+],
+"Roundness Horizontal Jitter": [
+"studio.rs"
+],
+"Roundness Vertical Jitter": [
+"studio.rs"
+],
+"Saturation": [
+"adjustments.rs",
+"layers.rs",
+"lighting.rs",
+"studio.rs"
+],
+"Save & Load": [
+"selection.rs"
+],
+"Scale": [
+"adjust_panels.rs",
+"studio.rs"
+],
+"Scatter": [
+"studio.rs"
+],
+"Screen": [
+"actions.rs"
+],
+"Screen Print": [
+"adjust_panels.rs"
+],
+"Screen Size": [
+"gallery.rs"
+],
+"Scrub": [
+"crates/core/src/gestures.rs"
+],
+"Search": [
+"library.rs"
+],
+"Search Library": [
+"source_editor.rs"
+],
+"Secondary": [
+"studio.rs"
+],
+"Secondary Color": [
+"studio.rs"
+],
+"Secondary color": [
+"studio.rs"
+],
+"Select": [
+"gallery.rs"
+],
+"Select All": [
+"layers.rs"
+],
+"Select brush": [
+"crates/core/src/quick_menu.rs"
+],
+"Select layer contents": [
+"crates/core/src/quick_menu.rs"
+],
+"Selection": [
+"crates/core/src/keys.rs"
+],
+"Selection Threshold {:.1}%": [
+"selection.rs"
+],
+"Selection mask visibility": [
+"actions.rs"
+],
+"Selection tool": [
+"crates/core/src/quick_menu.rs"
+],
+"Selection {}": [
+"selection.rs"
+],
+"Selections": [
+"selection.rs"
+],
+"Set Action": [
+"quick_menu.rs"
+],
+"Set as active": [
+"colours.rs"
+],
+"Settings": [
+"animated_export.rs",
+"animation.rs",
+"crop.rs",
+"studio.rs",
+"transform.rs"
+],
+"Shade": [
+"layers.rs"
+],
+"Shadows": [
+"adjust_panels.rs"
+],
+"Shape": [
+"studio.rs"
+],
+"Shape Editor": [
+"source_editor.rs"
+],
+"Shape Source": [
+"source_editor.rs",
+"studio.rs"
+],
+"Shape filtering": [
+"studio.rs"
+],
+"Shape properties": [
+"studio.rs"
+],
+"Share": [
+"actions.rs",
+"colours.rs",
+"gallery.rs",
+"layers.rs",
+"library.rs",
+"ui.rs"
+],
+"Share Image": [
+"actions.rs"
+],
+"Share Layers": [
+"actions.rs"
+],
+"Share Model": [
+"actions.rs"
+],
+"Share Textures": [
+"actions.rs"
+],
+"Share as {}": [
+"animated_export.rs"
+],
+"Shared": [
+"layers.rs"
+],
+"Shared Reference": [
+"layers.rs"
+],
+"Sharp": [
+"studio.rs"
+],
+"Sharpen": [
+"crates/core/src/adjust_menu.rs"
+],
+"Show": [
+"ui.rs"
+],
+"Show 2D texture": [
+"actions.rs"
+],
+"Show Environment": [
+"lighting.rs"
+],
+"Show Submesh": [
+"layers.rs"
+],
+"Show Texture Set": [
+"crates/core/src/scene3d.rs"
+],
+"Show both": [
+"actions.rs"
+],
+"Show environment": [
+"animated_export.rs"
+],
+"Show layer": [
+"crates/core/src/layers.rs"
+],
+"Show while hovering": [
+"actions.rs"
+],
+"Show while painting": [
+"actions.rs"
+],
+"Sign here": [
+"canvas_info.rs"
+],
+"Signal": [
+"adjust_panels.rs"
+],
+"Simplified Undos": [
+"settings.rs"
+],
+"Single": [
+"adjust_panels.rs"
+],
+"Single Touch Gestures Companion": [
+"settings.rs"
+],
+"Single touch move": [
+"crates/core/src/quick_menu.rs"
+],
+"Single touch zoom": [
+"crates/core/src/quick_menu.rs"
+],
+"Size": [
+"adjust_panels.rs",
+"chrome.rs",
+"liquify.rs",
+"studio.rs",
+"text.rs"
+],
+"Size & Opacity sidebar": [
+"actions.rs"
+],
+"Size compression": [
+"studio.rs"
+],
+"Smooth": [
+"studio.rs"
+],
+"Smudge": [
+"crates/core/src/quick_menu.rs"
+],
+"Smudge Pull": [
+"studio.rs"
+],
+"Smudge library": [
+"library.rs"
+],
+"Smudging": [
+"ui.rs"
+],
+"Snapped to {what}": [
+"overlays.rs"
+],
+"Snapping": [
+"crop.rs",
+"transform.rs"
+],
+"Soft": [
+"source_editor.rs"
+],
+"Solo visibility": [
+"crates/core/src/quick_menu.rs"
+],
+"Solo visibility off": [
+"crates/core/src/layers.rs"
+],
+"Solo visibility on": [
+"crates/core/src/layers.rs"
+],
+"Source Library": [
+"source_editor.rs"
+],
+"Spacing": [
+"studio.rs"
+],
+"Spacing Jitter": [
+"studio.rs"
+],
+"Speed": [
+"studio.rs"
+],
+"Split Complementary": [
+"colours.rs"
+],
+"Square": [
+"animated_export.rs",
+"overlays.rs"
+],
+"Stabilization": [
+"actions.rs",
+"studio.rs"
+],
+"Stack": [
+"gallery.rs"
+],
+"Stamp": [
+"studio.rs"
+],
+"Stamp color jitter": [
+"studio.rs"
+],
+"Start Gallery Recovery": [
+"gallery.rs"
+],
+"Statistics": [
+"canvas_info.rs"
+],
+"StreamLine": [
+"studio.rs"
+],
+"Strength": [
+"liquify.rs"
+],
+"Stroke color jitter": [
+"studio.rs"
+],
+"Stroke path": [
+"studio.rs"
+],
+"Stroke properties": [
+"studio.rs"
+],
+"Strokes made in an adjustment undo together once it is left.": [
+"settings.rs"
+],
+"Studio": [
+"lighting.rs"
+],
+"Studio quality": [
+"custom_canvas.rs"
+],
+"Style": [
+"text.rs"
+],
+"Stylus": [
+"studio.rs"
+],
+"Subtract": [
+"layers.rs"
+],
+"Sunrise": [
+"lighting.rs"
+],
+"Swap the colours": [
+"crates/core/src/keys.rs"
+],
+"Symmetry": [
+"guide_editor.rs"
+],
+"Symmetry Guide visibility": [
+"crates/core/src/quick_menu.rs"
+],
+"TIFF": [
+"actions.rs",
+"prefs.rs"
+],
+"TTC": [
+"text.rs"
+],
+"TTF": [
+"text.rs"
+],
+"Take a photo": [
+"actions.rs"
+],
+"Take a private photo": [
+"actions.rs"
+],
+"Tap + to start a new canvas": [
+"gallery.rs"
+],
+"Tap Assistance - Initial Touch Location Support": [
+"settings.rs"
+],
+"Tap to create vanishing points": [
+"guide_editor.rs"
+],
+"Tap □": [
+"crates/core/src/gestures.rs"
+],
+"Taper": [
+"studio.rs"
+],
+"Taper properties": [
+"studio.rs"
+],
+"Tetradic": [
+"colours.rs"
+],
+"Text": [
+"text.rs"
+],
+"Text rasterized": [
+"layers.rs",
+"text.rs"
+],
+"Texturized": [
+"studio.rs"
+],
+"The animation could not be exported.": [
+"ui.rs"
+],
+"The graphics device stopped": [
+"app.rs"
+],
+"The interface font is Inter, by The Inter Project Authors.\\n\\n": [
+"licences.rs"
+],
+"The interface steps aside while you paint": [
+"crates/core/src/gestures.rs"
+],
+"The palettes couldn't be kept.": [
+"ui.rs"
+],
+"The photo couldn't be kept.": [
+"canvas_info.rs"
+],
+"The signature couldn't be kept.": [
+"canvas_info.rs"
+],
+"The time-lapse video couldn't be made.": [
+"timelapse.rs"
+],
+"There is no time-lapse to export yet.": [
+"timelapse.rs"
+],
+"There's no picture to paste.": [
+"source_editor.rs"
+],
+"Thickness": [
+"guide_editor.rs"
+],
+"This can't be undone.": [
+"gallery.rs"
+],
+"This couldn't be removed.": [
+"actions.rs"
+],
+"This file can't be read.": [
+"ui.rs"
+],
+"This file has no brushes in it.": [
+"ui.rs"
+],
+"This palette can't be read.": [
+"app.rs"
+],
+"This picture can't be opened.": [
+"layers.rs",
+"reference.rs",
+"source_editor.rs",
+"ui.rs"
+],
+"This picture can't be read.": [
+"colours.rs"
+],
+"This video can't be opened.": [
+"ui.rs"
+],
+"Those meshes aren't in the same texture set": [
+"layers.rs"
+],
+"Three-finger swipe": [
+"crates/core/src/gestures.rs"
+],
+"Threshold Amount": [
+"studio.rs"
+],
+"Threshold {}%": [
+"colour_drop.rs"
+],
+"Tilt": [
+"studio.rs"
+],
+"Tilt angle": [
+"studio.rs"
+],
+"Tilt roundness": [
+"studio.rs"
+],
+"Time-lapse": [
+"ui.rs"
+],
+"Time-lapse Recording": [
+"actions.rs"
+],
+"Time-lapse Replay": [
+"actions.rs",
+"timelapse.rs"
+],
+"Time-lapse settings": [
+"custom_canvas.rs"
+],
+"Tip": [
+"studio.rs"
+],
+"Tip Attachment": [
+"actions.rs"
+],
+"Tip animation": [
+"studio.rs"
+],
+"Toggle visibility": [
+"crates/core/src/layers.rs"
+],
+"Tools": [
+"crates/core/src/keys.rs"
+],
+"Total file size": [
+"canvas_info.rs"
+],
+"Total strokes made": [
+"canvas_info.rs"
+],
+"Touch": [
+"crates/core/src/gestures.rs"
+],
+"Touch and hold": [
+"crates/core/src/gestures.rs"
+],
+"Touch only": [
+"studio.rs"
+],
+"Touch properties": [
+"studio.rs"
+],
+"Touch taper": [
+"studio.rs"
+],
+"Tracked time": [
+"canvas_info.rs"
+],
+"Tracking": [
+"text.rs"
+],
+"Transform": [
+"crates/core/src/keys.rs"
+],
+"Transform tool": [
+"crates/core/src/quick_menu.rs"
+],
+"Transforming: move it a pixel": [
+"crates/core/src/keys.rs"
+],
+"Transition": [
+"adjust_panels.rs"
+],
+"Transparency": [
+"adjust_panels.rs"
+],
+"Transparent background": [
+"animated_export.rs"
+],
+"Triadic": [
+"colours.rs"
+],
+"Triangle": [
+"overlays.rs"
+],
+"Turbulence": [
+"adjust_panels.rs"
+],
+"Turn Off": [
+"ui.rs"
+],
+"Turn off": [
+"actions.rs"
+],
+"Turn on": [
+"actions.rs"
+],
+"Twirl Left": [
+"liquify.rs"
+],
+"Twirl Right": [
+"liquify.rs"
+],
+"Two fingers turn the canvas as they zoom it": [
+"crates/core/src/gestures.rs"
+],
+"Two- and three-finger taps leave the history alone": [
+"crates/core/src/gestures.rs"
+],
+"Typeface": [
+"text.rs"
+],
+"USDZ": [
+"actions.rs"
+],
+"Undo": [
+"adjustments.rs",
+"companion.rs",
+"ui.rs"
+],
+"Undo brings them back.": [
+"layers.rs"
+],
+"Undo {name}": [
+"ui.rs"
+],
+"Undo {n}": [
+"ui.rs"
+],
+"Undo, redo, tools and panels click as they are used.": [
+"settings.rs"
+],
+"Ungroup": [
+"crates/core/src/layers.rs"
+],
+"Uniform": [
+"transform.rs"
+],
+"Uniform Blending": [
+"studio.rs"
+],
+"Uniformed Glaze": [
+"studio.rs"
+],
+"Unlock": [
+"layers.rs",
+"ui.rs"
+],
+"Unlock Layer Group": [
+"crates/core/src/layers.rs"
+],
+"Unlock Texture Set": [
+"crates/core/src/scene3d.rs"
+],
+"Unlock layer": [
+"crates/core/src/layers.rs"
+],
+"Unlock mesh": [
+"layers.rs"
+],
+"Unpin": [
+"library.rs"
+],
+"Unsupported model features": [
+"ui.rs"
+],
+"Untitled Artwork": [
+"animated_export.rs",
+"timelapse.rs"
+],
+"Untitled Canvas": [
+"custom_canvas.rs"
+],
+"Use stamp preview": [
+"studio.rs"
+],
+"Value": [
+"colours.rs"
+],
+"Velocity": [
+"transform.rs"
+],
+"Version ": [
+"gallery.rs"
+],
+"Vertical": [
+"guide_editor.rs"
+],
+"Video": [
+"actions.rs"
+],
+"Video codec": [
+"canvas_info.rs"
+],
+"Video file size": [
+"canvas_info.rs"
+],
+"Video length": [
+"canvas_info.rs",
+"timelapse.rs"
+],
+"Video quality": [
+"canvas_info.rs"
+],
+"Video resolution": [
+"canvas_info.rs"
+],
+"Video settings": [
+"canvas_info.rs"
+],
+"View": [
+"crates/core/src/keys.rs"
+],
+"View in AR": [
+"actions.rs"
+],
+"WAVEfmt ": [
+"sound.rs"
+],
+"Warp": [
+"transform.rs"
+],
+"Wave": [
+"adjust_panels.rs"
+],
+"Web Ready": [
+"animated_export.rs"
+],
+"Wet Mix": [
+"studio.rs"
+],
+"Wet edges": [
+"studio.rs"
+],
+"Wet mix": [
+"studio.rs"
+],
+"Wetness jitter": [
+"studio.rs"
+],
+"While the pen hovers, drag a finger for opacity and pinch for size": [
+"crates/core/src/gestures.rs"
+],
+"Width": [
+"custom_canvas.rs"
+],
+"X-Ray": [
+"selection.rs"
+],
+"Yellow": [
+"adjust_panels.rs"
+],
+"Zoom": [
+"adjust_panels.rs",
+"companion.rs",
+"studio.rs"
+],
+"Zoom distance": [
+"animated_export.rs"
+],
+"\\n\\nThe app keeps Lucide icons (lucide.dev), by Lucide Icons and Contributors.\\n\\n": [
+"licences.rs"
+],
+"\\u{201c}{name}\\u{201d} can't be changed while {why}.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} can't be changed while it is locked.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} can't be liquified while its alpha is locked.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} can't be painted while it is hidden.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} can't be painted while it is locked.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} holds no layers to change.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} is a group: choose one of its layers to paint on.": [
+"ui.rs"
+],
+"\\u{201c}{}\\u{201d} is on every mesh of this texture set.": [
+"layers.rs"
+],
+"a circle": [
+"overlays.rs"
+],
+"a frame couldn't be drawn": [
+"video.rs"
+],
+"a frame wasn't written": [
+"video.rs"
+],
+"a frame's pixel buffer can't be written": [
+"video.rs"
+],
+"a layer in it is hidden": [
+"ui.rs"
+],
+"a line": [
+"overlays.rs"
+],
+"a package's time-lapse video: {e}": [
+"timelapse.rs"
+],
+"a package's time-lapse: {e}": [
+"timelapse.rs"
+],
+"a page is missing": [
+"pdf.rs"
+],
+"a polyline": [
+"overlays.rs"
+],
+"a quadrilateral": [
+"overlays.rs"
+],
+"a rectangle": [
+"overlays.rs"
+],
+"a square": [
+"overlays.rs"
+],
+"a time-lapse video for a package: {e}": [
+"timelapse.rs"
+],
+"a time-lapse video: {e}": [
+"timelapse.rs"
+],
+"a triangle": [
+"overlays.rs"
+],
+"about close": [
+"gallery.rs"
+],
+"about recovery": [
+"gallery.rs"
+],
+"actions frame": [
+"actions.rs"
+],
+"actions panel": [
+"actions.rs"
+],
+"actions rows": [
+"actions.rs"
+],
+"actions_tab {}": [
+"prefs.rs"
+],
+"additive in the menu": [
+"adjust_panels.rs"
+],
+"adjust mode": [
+"adjustments.rs"
+],
+"adjust modes": [
+"adjustments.rs"
+],
+"adjust modes button": [
+"adjustments.rs"
+],
+"adjustment bar": [
+"adjustments.rs"
+],
+"adjustment pie": [
+"adjustments.rs"
+],
+"adjustments frame": [
+"adjustments.rs"
+],
+"adjustments menu": [
+"adjustments.rs"
+],
+"advanced settings": [
+"settings.rs"
+],
+"all caps": [
+"text.rs"
+],
+"an arc": [
+"overlays.rs"
+],
+"an ellipse": [
+"overlays.rs"
+],
+"an equilateral triangle": [
+"overlays.rs"
+],
+"animated export": [
+"animated_export.rs"
+],
+"animation bar": [
+"animation.rs"
+],
+"animation settings": [
+"animation.rs"
+],
+"another layer is shown alone": [
+"ui.rs"
+],
+"app mark": [
+"gallery.rs"
+],
+"aspect lock": [
+"crop.rs"
+],
+"author photo": [
+"canvas_info.rs"
+],
+"background colour": [
+"layers.rs"
+],
+"background done": [
+"colours.rs"
+],
+"background visible": [
+"layers.rs"
+],
+"balance panel": [
+"adjust_panels.rs"
+],
+"blend editor": [
+"layers.rs"
+],
+"blend list": [
+"studio.rs"
+],
+"bloom toolbar": [
+"adjust_panels.rs"
+],
+"bottom bar": [
+"reference.rs"
+],
+"brush library": [
+"library.rs"
+],
+"brush maker": [
+"studio.rs"
+],
+"brush name": [
+"studio.rs"
+],
+"brush previews": [
+"library.rs"
+],
+"brush scaling": [
+"actions.rs"
+],
+"brush signature": [
+"studio.rs"
+],
+"brush studio": [
+"studio.rs"
+],
+"brush {key:?}": [
+"library.rs"
+],
+"brush_cursor {}": [
+"prefs.rs"
+],
+"brush_on_screen {}": [
+"prefs.rs"
+],
+"canvas info": [
+"canvas_info.rs"
+],
+"canvas overlays": [
+"overlays.rs"
+],
+"channel tile": [
+"layers.rs"
+],
+"channel {c} {}": [
+"layers.rs"
+],
+"check off grey": [
+"layers.rs"
+],
+"check off white": [
+"layers.rs"
+],
+"check on grey": [
+"layers.rs"
+],
+"check on white": [
+"layers.rs"
+],
+"chosen letters": [
+"text.rs"
+],
+"chromatic toolbar": [
+"adjust_panels.rs"
+],
+"classic brightness": [
+"colours.rs"
+],
+"classic hue": [
+"colours.rs"
+],
+"classic saturation": [
+"colours.rs"
+],
+"classic square": [
+"colours.rs"
+],
+"clear history": [
+"colours.rs"
+],
+"clear search": [
+"library.rs"
+],
+"clear signature": [
+"canvas_info.rs"
+],
+"clone puck": [
+"adjustments.rs"
+],
+"closing canvas": [
+"zoom.rs"
+],
+"closing while a canvas is still being made: the window goes, the artwork is kept once it is made": [
+"app.rs"
+],
+"color=size={width}x{height}:rate=30": [
+"video.rs"
+],
+"color_history_shown {}": [
+"prefs.rs"
+],
+"color_names {}": [
+"prefs.rs"
+],
+"colour bar": [
+"guide_editor.rs"
+],
+"colour button": [
+"ui.rs"
+],
+"colour disc": [
+"colours.rs"
+],
+"colour drop band": [
+"colour_drop.rs"
+],
+"colour drop button": [
+"colour_drop.rs"
+],
+"colour drop dot": [
+"colour_drop.rs"
+],
+"colour frame": [
+"colours.rs"
+],
+"colour model": [
+"colours.rs"
+],
+"colour models": [
+"colours.rs"
+],
+"colour panel": [
+"colours.rs"
+],
+"colour_model {}": [
+"prefs.rs"
+],
+"combine mode": [
+"studio.rs"
+],
+"combine picked": [
+"library.rs"
+],
+"compact colours": [
+"compact_colours.rs"
+],
+"compact hue": [
+"compact_colours.rs"
+],
+"compact palettes": [
+"compact_colours.rs"
+],
+"compact swatch": [
+"compact_colours.rs"
+],
+"compact tab": [
+"compact_colours.rs"
+],
+"compact value": [
+"compact_colours.rs"
+],
+"companion grab": [
+"companion.rs"
+],
+"copy and paste": [
+"copy_paste.rs"
+],
+"crop dpi": [
+"crop.rs"
+],
+"crop height": [
+"crop.rs"
+],
+"crop settings": [
+"crop.rs"
+],
+"crop switch": [
+"crop.rs"
+],
+"crop turn": [
+"crop.rs"
+],
+"crop width": [
+"crop.rs"
+],
+"csv=p=0": [
+"video.rs"
+],
+"cursor_shows {}": [
+"prefs.rs"
+],
+"cursor_style {}": [
+"prefs.rs"
+],
+"curve delete": [
+"adjust_panels.rs"
+],
+"curve node menu": [
+"curve.rs"
+],
+"curve {}": [
+"prefs.rs"
+],
+"curves panel": [
+"adjust_panels.rs"
+],
+"custom canvas": [
+"custom_canvas.rs",
+"gallery.rs"
+],
+"delete picked": [
+"library.rs"
+],
+"drag_format {}": [
+"prefs.rs"
+],
+"drag_image_format {}": [
+"prefs.rs"
+],
+"drawn-{n}": [
+"pdf.rs"
+],
+"edit source": [
+"studio.rs"
+],
+"edit style": [
+"text.rs"
+],
+"escape taken": [
+"ui.rs"
+],
+"export card": [
+"export_card.rs"
+],
+"export frame {i}": [
+"animated_export.rs"
+],
+"export settings": [
+"animated_export.rs"
+],
+"exporting an animation: {e}": [
+"animated_export.rs"
+],
+"exporting the time-lapse: {e}": [
+"timelapse.rs"
+],
+"face {name}": [
+"text.rs"
+],
+"feedback_sounds {}": [
+"prefs.rs"
+],
+"ffmpeg gave no output": [
+"video.rs"
+],
+"ffmpeg took no input": [
+"video.rs"
+],
+"ffmpeg: {}": [
+"video.rs"
+],
+"files opened from the Finder aren't taken: the app has no delegate": [
+"finder.rs"
+],
+"files opened from the Finder aren't taken: the app's delegate takes them itself": [
+"finder.rs"
+],
+"fit_inside {}": [
+"prefs.rs"
+],
+"format=nv12,hwupload": [
+"video.rs"
+],
+"format=yuv420p": [
+"video.rs"
+],
+"fps slider": [
+"animated_export.rs"
+],
+"frame options": [
+"animation.rs"
+],
+"frame {id}": [
+"animation.rs"
+],
+"gallery cell": [
+"gallery.rs"
+],
+"gallery grid": [
+"gallery.rs"
+],
+"gallery spread": [
+"gallery.rs"
+],
+"gesture controls": [
+"gesture_controls.rs"
+],
+"gesture delay": [
+"gesture_controls.rs"
+],
+"gesture page": [
+"gesture_controls.rs"
+],
+"gesture switch": [
+"gesture_controls.rs"
+],
+"getting ready": [
+"app.rs"
+],
+"glitch toolbar": [
+"adjust_panels.rs"
+],
+"gradient bar": [
+"gradient_map.rs"
+],
+"gradient cards": [
+"gradient_map.rs"
+],
+"gradient done": [
+"gradient_map.rs"
+],
+"gradient map": [
+"gradient_map.rs"
+],
+"gradient menu": [
+"gradient_map.rs"
+],
+"grid size chip": [
+"guide_editor.rs"
+],
+"guide canvas": [
+"guide_editor.rs"
+],
+"guide options": [
+"guide_editor.rs"
+],
+"guide size keypad": [
+"guide_editor.rs"
+],
+"guide toolbar": [
+"guide_editor.rs"
+],
+"guide top": [
+"guide_editor.rs"
+],
+"halftone toolbar": [
+"adjust_panels.rs"
+],
+"harmony brightness": [
+"colours.rs"
+],
+"harmony kind": [
+"colours.rs"
+],
+"harmony kinds": [
+"colours.rs"
+],
+"harmony wheel": [
+"colours.rs"
+],
+"hex back": [
+"colours.rs"
+],
+"hex field": [
+"colours.rs"
+],
+"hex key": [
+"colours.rs"
+],
+"hex pad": [
+"colours.rs"
+],
+"hover cross": [
+"ui.rs"
+],
+"hover ring": [
+"ui.rs"
+],
+"hsb panel": [
+"adjustments.rs"
+],
+"hue ring": [
+"colours.rs"
+],
+"import image": [
+"reference.rs"
+],
+"import menu": [
+"source_editor.rs"
+],
+"import plugin": [
+"actions.rs"
+],
+"info page": [
+"canvas_info.rs"
+],
+"it is hidden": [
+"ui.rs"
+],
+"it stopped": [
+"app.rs"
+],
+"its group is hidden": [
+"ui.rs"
+],
+"its layer is hidden": [
+"ui.rs"
+],
+"its pipelines failed on this graphics backend, and it couldn't start itself again": [
+"app.rs"
+],
+"keeping the author's photo: {e}": [
+"canvas_info.rs"
+],
+"keeping the presets: {e}": [
+"gallery.rs"
+],
+"keeping the signature: {e}": [
+"canvas_info.rs"
+],
+"keypad page": [
+"studio.rs"
+],
+"layer choice": [
+"layer_choice.rs"
+],
+"layer opacity bar": [
+"adjustments.rs"
+],
+"layer options": [
+"layers.rs"
+],
+"layer {}": [
+"layers.rs"
+],
+"layers frame": [
+"layers.rs"
+],
+"layers list": [
+"layers.rs"
+],
+"layers panel": [
+"layers.rs"
+],
+"layers title menu": [
+"layers.rs"
+],
+"library brushes": [
+"library.rs"
+],
+"library cancel": [
+"source_editor.rs"
+],
+"library cell": [
+"source_editor.rs"
+],
+"library frame": [
+"library.rs"
+],
+"library plus menu": [
+"library.rs"
+],
+"library recent menu": [
+"library.rs"
+],
+"library results": [
+"library.rs"
+],
+"library search": [
+"library.rs"
+],
+"library set menu": [
+"library.rs"
+],
+"library sets": [
+"library.rs"
+],
+"library tab": [
+"source_editor.rs"
+],
+"library veil": [
+"source_editor.rs"
+],
+"licences offsets": [
+"licences.rs"
+],
+"licences scrim": [
+"licences.rs"
+],
+"licences text": [
+"licences.rs"
+],
+"lifted artwork": [
+"gallery.rs"
+],
+"light action": [
+"lighting.rs"
+],
+"light settings": [
+"lighting.rs"
+],
+"light slider": [
+"lighting.rs"
+],
+"light_interface {}": [
+"prefs.rs"
+],
+"lighting studio bar": [
+"lighting.rs"
+],
+"lighting studio view": [
+"lighting.rs"
+],
+"liquify adjust": [
+"liquify.rs"
+],
+"liquify button": [
+"liquify.rs"
+],
+"liquify kind": [
+"liquify.rs"
+],
+"liquify kinds": [
+"liquify.rs"
+],
+"liquify panel": [
+"liquify.rs"
+],
+"liquify way": [
+"liquify.rs"
+],
+"luma slider": [
+"colours.rs"
+],
+"making a {width} x {height} video with {codec}": [
+"video.rs"
+],
+"menu additive": [
+"adjust_panels.rs"
+],
+"menu slider": [
+"transform.rs"
+],
+"mesh box": [
+"layers.rs"
+],
+"mesh lock": [
+"layers.rs"
+],
+"mesh {index}": [
+"layers.rs"
+],
+"mode tab": [
+"colours.rs"
+],
+"model picture": [
+"model_picture.rs"
+],
+"model picture bar": [
+"model_picture.rs"
+],
+"more options": [
+"gallery.rs"
+],
+"motion_expression {}": [
+"prefs.rs"
+],
+"motion_filtering {}": [
+"prefs.rs"
+],
+"new canvas": [
+"gallery.rs"
+],
+"new gradient": [
+"gradient_map.rs"
+],
+"new layer": [
+"layers.rs"
+],
+"new palette": [
+"colours.rs"
+],
+"new palette menu": [
+"colours.rs"
+],
+"no bitmap to draw the page into": [
+"pdf.rs"
+],
+"no encoder takes this video": [
+"video.rs"
+],
+"no frames": [
+"timelapse.rs"
+],
+"no pages": [
+"pdf.rs"
+],
+"no pixel buffer for a frame": [
+"video.rs"
+],
+"no sRGB colour space": [
+"pdf.rs"
+],
+"no size fits": [
+"video.rs"
+],
+"no video size": [
+"video.rs"
+],
+"no_time_lapse {}": [
+"prefs.rs"
+],
+"noise channels": [
+"adjust_panels.rs"
+],
+"noise toolbar": [
+"adjust_panels.rs"
+],
+"not a PDF": [
+"pdf.rs"
+],
+"not a file's path": [
+"pdf.rs"
+],
+"number field": [
+"transform_numeric.rs"
+],
+"numeric key": [
+"transform_numeric.rs"
+],
+"onion colours": [
+"animation.rs"
+],
+"onion picker": [
+"animation.rs"
+],
+"opacity slider": [
+"chrome.rs"
+],
+"option slider": [
+"adjust_panels.rs"
+],
+"options menu": [
+"adjust_panels.rs"
+],
+"options menu scrim": [
+"adjust_panels.rs"
+],
+"orientation_memory {}": [
+"prefs.rs"
+],
+"pad colour": [
+"studio.rs"
+],
+"pad menu": [
+"studio.rs"
+],
+"pad row": [
+"studio.rs"
+],
+"pad_3d {}": [
+"prefs.rs"
+],
+"page-{n}.png": [
+"pdf.rs"
+],
+"page-{}.png": [
+"pdf.rs"
+],
+"palette menu": [
+"colours.rs"
+],
+"palette more": [
+"colours.rs"
+],
+"palette name": [
+"colours.rs"
+],
+"palette slot": [
+"colours.rs"
+],
+"palette swatch": [
+"colours.rs"
+],
+"palette view": [
+"colours.rs"
+],
+"part card": [
+"studio.rs"
+],
+"perspective puck": [
+"adjustments.rs"
+],
+"perspective toolbar": [
+"adjust_panels.rs"
+],
+"picker back": [
+"quick_menu.rs"
+],
+"played {i}": [
+"gallery.rs"
+],
+"plugin action": [
+"actions.rs"
+],
+"plugin cards": [
+"actions.rs"
+],
+"plugin filter toolbar": [
+"adjust_panels.rs"
+],
+"plugin switch": [
+"actions.rs"
+],
+"pressure rows": [
+"actions.rs"
+],
+"pressure_smoothing {}": [
+"prefs.rs"
+],
+"preview arrow": [
+"gallery.rs"
+],
+"preview close": [
+"gallery.rs"
+],
+"preview size": [
+"studio.rs"
+],
+"private row": [
+"actions.rs"
+],
+"procraft-segments-{}": [
+"timelapse.rs"
+],
+"project_canvas {}": [
+"prefs.rs"
+],
+"quick button": [
+"quick_menu.rs"
+],
+"quick menu": [
+"quick_menu.rs"
+],
+"quick menus": [
+"quick_menu.rs"
+],
+"quick menus list": [
+"quick_menu.rs"
+],
+"quick picker": [
+"quick_menu.rs"
+],
+"quick picker list": [
+"quick_menu.rs"
+],
+"quick title": [
+"quick_menu.rs"
+],
+"rapid_undo_delay {}": [
+"prefs.rs"
+],
+"recolor reticle": [
+"recolor.rs"
+],
+"recolor toolbar": [
+"adjust_panels.rs"
+],
+"recolor_threshold {}": [
+"prefs.rs"
+],
+"reference bars": [
+"reference.rs"
+],
+"reference canvas": [
+"reference.rs"
+],
+"reference canvas crisp": [
+"reference.rs"
+],
+"reference canvas glass": [
+"reference.rs"
+],
+"reference picture": [
+"reference.rs"
+],
+"reference picture glass": [
+"reference.rs"
+],
+"rename artwork": [
+"gallery.rs"
+],
+"renamed artwork": [
+"gallery.rs"
+],
+"repeat slider": [
+"source_editor.rs"
+],
+"repeat switch": [
+"source_editor.rs"
+],
+"right_handed {}": [
+"prefs.rs"
+],
+"save selection": [
+"selection.rs"
+],
+"saved selection": [
+"selection.rs"
+],
+"saved selection {i}": [
+"selection.rs"
+],
+"screen size": [
+"gallery.rs"
+],
+"select done": [
+"gallery.rs"
+],
+"select marks": [
+"gallery.rs"
+],
+"selection overlay": [
+"selection.rs"
+],
+"selection pointer": [
+"ui.rs"
+],
+"selection popover": [
+"selection.rs"
+],
+"selection toolbar": [
+"selection.rs"
+],
+"selection_visibility {}": [
+"prefs.rs"
+],
+"selection_x_ray {}": [
+"prefs.rs"
+],
+"set icon": [
+"library.rs"
+],
+"set icon picker": [
+"library.rs"
+],
+"set icons": [
+"library.rs"
+],
+"settings choice menu": [
+"settings.rs"
+],
+"settings choice open": [
+"settings.rs"
+],
+"settings row": [
+"settings.rs"
+],
+"shape bar": [
+"overlays.rs"
+],
+"shape kind": [
+"overlays.rs"
+],
+"shape kinds": [
+"overlays.rs"
+],
+"share formats": [
+"gallery.rs"
+],
+"short clear": [
+"colours.rs"
+],
+"short colour menu": [
+"colours.rs"
+],
+"short menu": [
+"colours.rs"
+],
+"shortcuts list": [
+"shortcuts.rs"
+],
+"shortcuts scrim": [
+"shortcuts.rs"
+],
+"show environment": [
+"lighting.rs"
+],
+"show the interface": [
+"ui.rs"
+],
+"side bar": [
+"chrome.rs"
+],
+"side bar place": [
+"panel.rs"
+],
+"side lit": [
+"chrome.rs"
+],
+"simplified_undos {}": [
+"prefs.rs"
+],
+"single_touch_companion {}": [
+"prefs.rs"
+],
+"size preview stamp": [
+"chrome.rs"
+],
+"size row": [
+"custom_canvas.rs"
+],
+"size slider": [
+"chrome.rs"
+],
+"slider keypad": [
+"studio.rs"
+],
+"slider panel": [
+"chrome.rs"
+],
+"source editor": [
+"source_editor.rs"
+],
+"source import": [
+"source_editor.rs"
+],
+"source library": [
+"source_editor.rs"
+],
+"source library search": [
+"source_editor.rs"
+],
+"source {kind:?}": [
+"studio.rs"
+],
+"speed distance": [
+"settings.rs"
+],
+"speed_distance {}": [
+"prefs.rs"
+],
+"stabilization {}": [
+"prefs.rs"
+],
+"stack left": [
+"gallery.rs"
+],
+"stream=width,height,avg_frame_rate": [
+"video.rs"
+],
+"studio done": [
+"lighting.rs"
+],
+"studio environment": [
+"lighting.rs"
+],
+"studio page": [
+"studio.rs"
+],
+"studio part {i}": [
+"studio.rs"
+],
+"studio parts": [
+"studio.rs"
+],
+"studio pill": [
+"lighting.rs"
+],
+"studio preview": [
+"studio.rs"
+],
+"studio slider": [
+"studio.rs"
+],
+"swipe open": [
+"gallery.rs"
+],
+"switch row": [
+"studio.rs"
+],
+"symmetry switch": [
+"guide_editor.rs"
+],
+"tap_assistance {}": [
+"prefs.rs"
+],
+"text cells": [
+"text.rs"
+],
+"text editor": [
+"text.rs"
+],
+"text field": [
+"text.rs"
+],
+"text style": [
+"text.rs"
+],
+"the PDF is locked with a password": [
+"pdf.rs"
+],
+"the brushes' sample strokes aren't drawn: {e}": [
+"library.rs"
+],
+"the canvases' pipelines failed on this graphics backend: starting again on the next": [
+"app.rs"
+],
+"the canvases' pipelines failed on this graphics backend: the next start takes the next": [
+"app.rs"
+],
+"the encoder doesn't take {w} x {h}: {e}": [
+"video.rs"
+],
+"the encoder stopped taking frames": [
+"video.rs"
+],
+"the encoder won't make it the size of those before": [
+"timelapse.rs"
+],
+"the file has no video": [
+"video.rs"
+],
+"the first frame can't be read": [
+"timelapse.rs"
+],
+"the graphics device stopped as this backend started: starting again on the next": [
+"app.rs"
+],
+"the graphics device stopped, and it couldn't start itself again": [
+"app.rs"
+],
+"the page's pixels came out short": [
+"pdf.rs"
+],
+"the system's encoder doesn't take this video": [
+"video.rs"
+],
+"the time-lapse's videos can't be read here: their pictures stay": [
+"timelapse.rs"
+],
+"the time-lapse's videos hold {gone} frames: their pictures went": [
+"timelapse.rs"
+],
+"the video can't be read": [
+"video.rs"
+],
+"the video wasn't finished": [
+"video.rs"
+],
+"the video wasn't finished in time": [
+"video.rs"
+],
+"the video's frames can't be read": [
+"video.rs"
+],
+"the video's tracks can't be read": [
+"video.rs"
+],
+"the video's tracks weren't found in time": [
+"video.rs"
+],
+"the writer didn't start": [
+"video.rs"
+],
+"the writer stopped": [
+"video.rs"
+],
+"the writer takes no such video": [
+"video.rs"
+],
+"this system lacks a video setting": [
+"video.rs"
+],
+"thumbnail {dir}": [
+"gallery.rs"
+],
+"tilt angle": [
+"studio.rs"
+],
+"time-lapse replay": [
+"timelapse.rs"
+],
+"tip_attached {}": [
+"prefs.rs"
+],
+"tool button": [
+"tool_header.rs"
+],
+"tool header": [
+"tool_header.rs"
+],
+"toolbar button": [
+"transform.rs"
+],
+"top bar": [
+"reference.rs"
+],
+"touch companion": [
+"companion.rs"
+],
+"transform box": [
+"transform.rs"
+],
+"transform numbers": [
+"transform_numeric.rs"
+],
+"transform numbers scrim": [
+"transform_numeric.rs"
+],
+"transform popover": [
+"transform.rs"
+],
+"transform toolbar": [
+"transform.rs"
+],
+"turntable environment": [
+"animated_export.rs"
+],
+"turntable size": [
+"animated_export.rs"
+],
+"turntable slider": [
+"animated_export.rs"
+],
+"turntable way": [
+"animated_export.rs"
+],
+"value switch": [
+"compact_colours.rs"
+],
+"vulkan=gpu": [
+"video.rs"
+],
+"{base}.{}": [
+"animated_export.rs"
+],
+"{degrees:.1}\\u{b0}": [
+"crop.rs"
+],
+"{degrees}\\u{b0}": [
+"studio.rs"
+],
+"{delay:.2}s": [
+"actions.rs"
+],
+"{doing} with the current brush": [
+"ui.rs"
+],
+"{dpi:.1}": [
+"canvas_info.rs"
+],
+"{kind:?}": [
+"studio.rs"
+],
+"{name}.mp4": [
+"timelapse.rs"
+],
+"{rgb:06X}": [
+"colours.rs"
+],
+"{seconds:.2}s": [
+"gesture_controls.rs"
+],
+"{value}{unit_text}": [
+"crop.rs"
+],
+"{width}x{height}": [
+"video.rs"
+],
+"{} artworks": [
+"gallery.rs"
+],
+"{} file(s) opened from the Finder": [
+"finder.rs"
+],
+"{} isn't a file's path": [
+"video.rs"
+],
+"{} took {} ms": [
+"app.rs"
+],
+"{}{digit}": [
+"studio.rs"
+],
+"{}{unit}": [
+"transform_numeric.rs"
+],
+"{}{unsaved} — ProCraft": [
+"app.rs"
+],
+"□ + Pen": [
+"crates/core/src/gestures.rs"
+],
+"□ + Touch": [
+"crates/core/src/gestures.rs"
+]
+}
