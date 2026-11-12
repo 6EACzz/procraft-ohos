@@ -14,9 +14,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 LIBS="$HERE/entry/libs/arm64-v8a"
 
-# The toolchain: the SDK's own clang for the target, and cargo.
-export PATH="$HOME/.cargo/bin:/opt/harmonyos/command-line-tools/bin:$PATH"
+# The toolchain: the SDK's own clang for the target, and cargo. Where the command line tools are
+# is the one thing this cannot work out for itself: `DEVECO_SDK_HOME` says where the SDK is (the
+# tools' `bin/` is expected beside it), and it is where the tools were installed if not.
 : "${DEVECO_SDK_HOME:=/opt/harmonyos/command-line-tools/sdk}"
+export PATH="$HOME/.cargo/bin:$(cd "$DEVECO_SDK_HOME/.." && pwd)/bin:$PATH"
 NDK="$DEVECO_SDK_HOME/default/openharmony/native"
 CC_TARGET="$NDK/llvm/bin/aarch64-unknown-linux-ohos-clang"
 
