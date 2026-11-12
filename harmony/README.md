@@ -58,6 +58,49 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
    - `take_dropped()/imported()/artwork_read()/photo_read()` —— 后台读完的作品要能进来，否则图库点开一直卡"Opening…"
    - 帧节流（`frame_gap`）—— 否则 egui 每帧都请求重绘，CPU 跑满。注意 `app.again` 要在读到时 `take()` 掉，
      留着不动会让每一轮都判定"要画"。
+   - `files::still_writing()` 的 250 ms 重排 —— 保存/导出是后台线程，写盘期间不再排帧就会停在半路。
+   - `startup::gpu_shown()` / `canvas_awaited()` / `canvas_shown()` —— 首帧与"画布是否真的画出来了"的记录，
+     缺了会让后端信任状态与"正在准备"提示永不前进。
+
+9. **`egui::Event::ModifiersChanged` 只在变化时推。**
+   每帧都推会让 egui 认为"输入一直在变"，`repaint_delay` 恒为 0，CPU 从 3% 涨到 55%。
+   同理，`app.input.commands` 非空时必须排一帧，否则落在画布上的笔画不会重绘（只有触摸移动会触发重绘）。
+
+10. **GLES 下管线线程必须在首帧之后才起，且 `gl_busy()` 不能恒为 false。**
+    wgpu-hal 的 GLES 后端抢上下文锁用 `try_lock_for(6s).expect(...)`——两个线程同时进就是
+    `cdylib` 直接 abort，日志里什么都没有。桌面版的写法是：`is_gl()` 时把 waker 存进
+    `canvases_later`，在 `draw()` 末尾已经 present 之后才 spawn；`gl_busy()` 报告线程是否仍在跑，
+    `App::frame` 据此让出 100 ms。
+
+11. **窗口的生命周期要自己抓住。**
+    `OnSurfaceDestroyed` 一返回，系统就会销毁 `OHNativeWindow`，而应用线程可能正画着那一帧。
+    所以 `procraft_start` 里用 `OH_NativeWindow_NativeObjectReference` 持住窗口，
+    应用线程结束时才 `Unreference`（见 `ohos_window.rs` 的 `hold`/`let_go`）。
+
+12. **`procraft_start` 在 ArkUI 的 UI 线程上跑，而提问的答复也只从那个线程来。**
+    所以它**不能** `join` 上一个应用线程：那个线程可能正卡在 `platform::ask` 里等 UI 线程答复，
+    互等就是最长十分钟的假死（转屏时最容易遇到）。改成把旧 handle 交给新线程，由新线程先 join
+    （`stop_before`）。
+
+13. **中英双语：翻译放在排版那一层，不放在每个调用点。**
+    `look.rs` 的 `tracked_runs`/`wrapped`/`text_width`/`laid` 全都走 `lang::tr_cow`，
+    于是"量多宽"和"画什么"永远是同一个字符串，不会因为翻译而对不齐。
+    新加界面文字只要把英文放进 `i18n/strings.json` 与某个 `part*.zh.txt`，
+    再 `python3 i18n/build_table.py` 重新生成 `desktop/src/lang/zh.rs` 即可；
+    表里没有的字符串自动回退英文（egui 的 `Id`、ffmpeg 参数、格式缩写等**故意**不翻）。
+    注意大小写转换要在翻译**之后**做（`tr(heading).to_uppercase()`），否则 `heading` 先变大写就查不到了。
+
+14. **ArkTS 回调的 error 参数在成功时可能是 `undefined`，也可能是 `{code: 0}`。**
+    写 `if (error)` 会误判成功为失败；写 `if (error.code)` 会在 `undefined` 上取属性而抛
+    `TypeError`——ArkTS 里未捕获的异常直接杀进程（`Kill Reason: Js Error`）。
+    正确写法是 `if (error && error.code)`。
+
+15. **文件选择器给的是 URI，不是路径。**
+    `picker.DocumentViewPicker.select()/save()` 返回 `file://docs/...`，直接当路径 `std::fs::read`
+    会 ENOENT，而当路径写文件会真的在沙箱里建一个名叫 `file:` 的文件。
+    约定是：Rust 只认路径；ArkTS 侧把选中的 URI `fs.copyFileSync` 到沙箱 `picked/`，
+    保存则先给一个沙箱 `outbox/` 路径、由 16 ms 的 pump 在文件写完（`.part` 改名之后）再拷回去。
+    文件夹选择同理（`DocumentSelectMode.FOLDER`，回写时逐个 `listFileSync` 拷贝）。
 
 ---
 
@@ -110,6 +153,9 @@ cd harmony
 - **系统文件选择器**：Import / Insert a file 能拉起系统 `DocumentViewPicker`，中文界面正常
 - **Actions 面板 / Share / Prefs / Help / Cut / Copy / Copy canvas / Paste** 均不再闪退
 - 全屏沉浸、隐藏系统栏、保持常亮
+- **中文界面**：图库、Actions 面板六个分页、设置页（含分组标题）、关于页、警告框、笔刷库全部中文；
+  设置 → 语言 可中英切换，整页即时重绘，选择写进 prefs 重启后保持
+- 空闲 CPU 0–3.7%（曾因每帧推 `ModifiersChanged` 跑到 55%）
 
 ---
 
@@ -117,4 +163,10 @@ cd harmony
 
 - 打包用的签名 profile 绑定 `io.github.otd.harmonyTest`，因此 `AppScope/app.json5` 里暂时用这个 bundle 名；换成自己的调试证书后改回 `io.github.artcraftandroid.procraft` 即可。
 - 文件选择/剪贴板经 ArkTS shell 往返，首次拉起系统选择器有系统本身的延迟。
-- 软键盘的显示目前靠 ArkTS 侧一个隐藏 TextInput 承接焦点；手写笔的真实压感、倾斜已从 `OH_NativeXComponent` 取到并传入笔刷引擎，但尚未在真机手写笔上做压感曲线标定。
+- 剪贴板**读**需要 `ohos.permission.READ_PASTEBOARD`，该权限是 `system_basic`，
+  必须在签名 profile 里加 ACL 才授予；只改 `module.json5` 不会生效。目前读剪贴板会被
+  pasteboard_service 明确拒绝（日志里有 `perm=ohos.permission.READ_PASTEBOARD`）。
+  写剪贴板（文字与图片）不需要权限，已可用。
+- 软键盘由 ArkTS 侧隐藏的 `TextInput` 承接焦点，输入法组字（CJK）经 `onDidInsert`/`onDidDelete`
+  逐字送到应用；第三方输入法的候选词行为依赖系统，未在多种输入法上逐一验证。
+- 手写笔的真实压感、倾斜已从 `OH_NativeXComponent` 取到并传入笔刷引擎，但尚未在真机手写笔上做压感曲线标定。

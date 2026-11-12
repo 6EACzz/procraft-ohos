@@ -290,6 +290,15 @@ enum Said {
     Stop,
 }
 
+/// The system's own BACK code (`KEYCODE_BACK`): the page sends it as Escape, and this takes it as
+/// the app's own where the app has somewhere to go back to.
+const KEYCODE_BACK: u32 = 2;
+
+/// Whether the app has something of its own to close before the shell closes the app: what the
+/// page asks when BACK is pressed (`procraft_can_go_back`). Kept by the app's own thread each
+/// pass, so that the shell's thread reads it without having to ask the app and wait for it.
+static BACK_HERE: AtomicBool = AtomicBool::new(false);
+
 /// The app's own thread's mailbox, and the way to wake it.
 static SAID: Mutex<Option<std::sync::mpsc::Sender<Said>>> = Mutex::new(None);
 /// The app's own thread, while one runs: a surface that goes stops it, and the next start waits
@@ -472,6 +481,11 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
             break;
         }
         pump_events(&mut app, &loop_);
+        // what BACK would do here, for the page to ask (its own thread, so that the shell's never
+        // waits on the app for it): whatever is open over the canvas, the artwork itself, or what
+        // the gallery has open over it. With none of those, BACK is the system's own and leaves.
+        let back_here = app.ui.popover_open || app.session.is_some() || app.gallery.busy();
+        BACK_HERE.store(back_here, Ordering::Relaxed);
         // what the files written on their own threads had to say (a save that failed, an export
         // done): the desktop's loop says it each pass, and nothing else ever would
         crate::files::tell_what_was_told();
@@ -598,6 +612,24 @@ fn take(app: &mut App<TabletHost, TabletLoop>, said: Said) {
             }
         }
         Said::Key { code, text, pressed, repeat } => {
+            // BACK goes back rather than leaving: what is open over the canvas closes (the key
+            // goes on as the Escape the interface knows), then the artwork goes back to the
+            // gallery as its button does, then whatever the gallery has open closes. Only when
+            // the gallery itself is all that shows is BACK the system's, and the page never sends
+            // it here then (`procraft_can_go_back` says so).
+            if code == KEYCODE_BACK && pressed && !repeat {
+                if app.ui.popover_open {
+                    // (the Escape below closes whichever panel, menu or field is open)
+                } else if app.session.is_some() {
+                    app.ui.actions.push(crate::ui::Action::Gallery);
+                    return;
+                } else if app.gallery.go_back() {
+                    if let Some(host) = app.host.as_ref() {
+                        host.request_redraw();
+                    }
+                    return;
+                }
+            }
             let (named, key_code, character) = key_of(code, text);
             if let Some(host) = app.host.as_mut() {
                 host.input.key(named, key_code, character, pressed, repeat);
@@ -915,6 +947,14 @@ pub unsafe extern "C" fn procraft_scale(pixels_per_point: f32) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_focused(focused: bool) {
     tell(Said::Focused(focused));
+}
+
+/// Whether the app has something of its own to close before the system closes it: what the page
+/// asks when BACK is pressed, so BACK closes a panel, an artwork or a stack rather than leaving.
+/// The app's own thread keeps this, so the shell's thread answers without waiting on the app.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_can_go_back() -> bool {
+    BACK_HERE.load(Ordering::Relaxed)
 }
 
 /// A file was opened with the app (a picture, an artwork), its path as UTF-8.

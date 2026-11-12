@@ -23,10 +23,12 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // the canvas is the whole screen: no title bar, no system bars over it
     windowStage.getMainWindow((error, main) => {
-      // the callback's error is `undefined` when it worked (it is a `BusinessError` only on
-      // failure): reading `.code` off nothing is itself a TypeError, and a TypeError nothing
-      // catches stops the process — it was the "Kill Reason: Js Error" the app started with
-      if (error) {
+      // the callback gives an error to look at either way: nothing at all on some paths and an
+      // object whose code is 0 on others (the tablet's own gives `{code: 0}` when it worked). So
+      // it is read as one only where it has a non-zero code — reading `.code` off nothing is
+      // itself a TypeError, and a TypeError nothing catches stops the process (it was the
+      // "Kill Reason: Js Error" the app started with)
+      if (error && error.code) {
         hilog.error(0x3200, TAG, 'the window: %{public}s', JSON.stringify(error));
         return;
       }
@@ -53,7 +55,7 @@ export default class EntryAbility extends UIAbility {
     });
 
     windowStage.loadContent('pages/Index', (error) => {
-      if (error) {
+      if (error && error.code) {
         hilog.error(0x3200, TAG, 'the page: %{public}s', JSON.stringify(error));
         return;
       }

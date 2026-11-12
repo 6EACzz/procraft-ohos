@@ -388,6 +388,63 @@ impl Gallery {
         gallery
     }
 
+    /// Leaves whatever of the gallery's own is open over it — a stack, Preview, Custom Canvas,
+    /// About, Select's More, a rename, Share's formats — as BACK does where the system has one.
+    /// False when the gallery is all that shows: BACK is then the system's own.
+    #[cfg_attr(not(target_env = "ohos"), allow(dead_code))]
+    pub fn go_back(&mut self) -> bool {
+        if self.about {
+            self.about = false;
+            return true;
+        }
+        if self.preview.is_some() {
+            self.preview = None;
+            self.played = None;
+            return true;
+        }
+        if self.custom.is_some() {
+            self.custom = None;
+            return true;
+        }
+        if self.selecting {
+            self.end_selecting();
+            return true;
+        }
+        if self.sharing.is_some() {
+            self.sharing = None;
+            return true;
+        }
+        if self.more_open {
+            self.more_open = false;
+            return true;
+        }
+        if self.renaming.take().is_some() {
+            return true;
+        }
+        if let Some((dir, name)) = self.stack.take() {
+            // its artworks fly back into its cell, as they do when its own way back is tapped
+            let cells = std::mem::take(&mut self.drawn_cells);
+            self.leaving_stack = Some(LeavingStack { dir, name, cells, since: Instant::now() });
+            self.refresh();
+            return true;
+        }
+        false
+    }
+
+    /// Whether the gallery has something of its own open over it, which BACK closes first.
+    #[cfg_attr(not(target_env = "ohos"), allow(dead_code))]
+    pub fn busy(&self) -> bool {
+        self.about
+            || self.preview.is_some()
+            || self.custom.is_some()
+            || self.selecting
+            || self.sharing.is_some()
+            || self.more_open
+            || self.renaming.is_some()
+            || self.stack.is_some()
+            || self.alert.is_open()
+    }
+
     /// Reads what is in the gallery (or the stack open) again.
     pub fn refresh(&mut self) {
         self.entries = self.store.list(self.stack.as_ref().map(|s| s.0.clone()));

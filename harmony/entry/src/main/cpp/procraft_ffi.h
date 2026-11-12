@@ -1,81 +1,81 @@
 #ifndef PROCRAFT_FFI_H
 #define PROCRAFT_FFI_H
 
+// What `libprocraft_ui.so` gives the shell (the app's own code, the desktop's interface built as
+// a library). Every function here is exported by `procraft/desktop/src/ohos_main.rs`; this file
+// was once a scaffold's guess at an interface that was never built that way, and the two do not
+// agree unless they are kept together — so the declarations live here once, and `napi_init.cpp`
+// takes them from here rather than writing its own copy that can drift.
+//
+// Every call is safe from the shell's own (ArkUI) thread: each one only takes a lock and wakes
+// the app's thread, which does the work (`tell` in ohos_main.rs). The one exception is
+// `procraft_start`, which waits for an app thread before it to finish.
+
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Core lifecycle and window attachment
-void procraft_init(const char* files_dir);
-uint64_t procraft_acquire_native_window(void* window);
-void procraft_release_native_window(uint64_t id);
+// The surface is ready: the app starts, drawing into `window` (the XComponent's own, taken as an
+// ohos native window). `width` and `height` are the surface's pixels and `pixels_per_point` its
+// density. Returns with the app started, not with it stopped: it runs on a thread of its own.
+// Waits for a previous app thread to finish first (see `procraft_surface_destroyed`).
+void procraft_start(void* window, uint32_t width, uint32_t height, float pixels_per_point);
 
-// Session management
-void* procraft_session_create(uint32_t width, uint32_t height);
-void procraft_session_destroy(void* session);
-bool procraft_session_attach_window(void* session, uint64_t window_id, uint32_t width, uint32_t height);
-void procraft_session_resize_window(void* session, uint32_t width, uint32_t height);
-void procraft_session_detach_window(void* session);
+// The folder the app keeps its own files in (its sandbox: nothing under $HOME is writable).
+void procraft_own_folder(const uint8_t* bytes, size_t length);
 
-// Touch and pen inputs
-void procraft_session_touch_down(
-    void* session,
-    uint64_t id,
-    float x,
-    float y,
-    float pressure,
-    float tilt,
-    float orientation,
-    bool is_pen
-);
+// The surface is gone: the app is asked to stop (it is not waited for here).
+void procraft_surface_destroyed();
 
-void procraft_session_touch_move(
-    void* session,
-    uint64_t id,
-    float x,
-    float y,
-    float pressure,
-    float tilt,
-    float orientation
-);
+// The app is to draw again (the shell's own side has news for it).
+void procraft_wake();
 
-void procraft_session_touch_up(
-    void* session,
-    uint64_t id,
-    float x,
-    float y,
-    float pressure,
-    float tilt,
-    float orientation
-);
+// A touch or a pen came. `phase` is 0 (down), 1 (move), 2 (up) or 3 (cancel); `x` and `y` are
+// the surface's pixels; `tilt` is radians from upright and `orientation` the direction it leans.
+void procraft_touch(uint64_t id, uint32_t phase, double x, double y, double pressure, double tilt,
+                    double orientation, bool pen, bool eraser);
 
-void procraft_session_touch_cancel(void* session);
+// A mouse moved over the surface, with nothing held down.
+void procraft_hover(uint64_t id, double x, double y, double tilt, double orientation, bool eraser);
 
-// View gestures
-void procraft_session_view_gesture(
-    void* session,
-    float pivot_x,
-    float pivot_y,
-    float pan_x,
-    float pan_y,
-    float scale,
-    float rotation
-);
-void procraft_session_fit_view(void* session);
+// The mouse left the surface.
+void procraft_hover_out(uint64_t id);
 
-// Painting commands
-bool procraft_session_undo(void* session);
-bool procraft_session_redo(void* session);
-void procraft_session_clear_layer(void* session);
-void procraft_session_set_tool(void* session, int32_t tool);
-void procraft_session_set_brush_size(void* session, float slider);
-void procraft_session_set_brush_opacity(void* session, float slider);
-void procraft_session_set_color(void* session, float r, float g, float b);
-void procraft_session_get_color(void* session, float* out_rgb);
-bool procraft_session_save_document(void* session, const char* path);
+// A key came: `code` is the system's key code, `text` what it types (0 for none).
+void procraft_key(uint32_t code, uint32_t text, bool pressed, bool repeat);
+
+// What a keyboard typed, as UTF-8 (a soft keyboard's own characters arrive this way).
+void procraft_text(const uint8_t* bytes, size_t length);
+
+// The surface's size in pixels.
+void procraft_resized(uint32_t width, uint32_t height);
+
+// The page's density (its vp to its pixels).
+void procraft_scale(float pixels_per_point);
+
+// The app's window has focus, or hasn't.
+void procraft_focused(bool focused);
+
+// A file was opened with the app (its path).
+void procraft_dropped_file(const uint8_t* bytes, size_t length);
+
+// What the app asked the shell for, since the last call: a JSON array of
+// `{"id":N,"kind":"...","details":{...}}`, each answered by `procraft_answer`. The caller owns the
+// string and hands it back with `procraft_asks_free`.
+const char* procraft_asks();
+void procraft_asks_free(const char* text);
+
+// The shell's answer to one ask: the paths picked (one a line), the clipboard's contents, and
+// whether the shell could do it at all. Either pointer may be null for none.
+void procraft_answer(uint64_t id, const char* paths, const char* clipboard, bool done);
+
+// Whether the app has something of its own to close before the shell closes the app (the page
+// asks this when BACK is pressed, so BACK closes the app's own dialog or panel first).
+bool procraft_can_go_back();
 
 #ifdef __cplusplus
 }
