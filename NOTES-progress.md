@@ -13,16 +13,16 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `760c653`（稳定分支，比上游 `a4af325` 领先 17 个提交）
-  - `experimental/harmony-performance` = `ed49255`（在 main 之上，+197/−15，性能）
+  - `main` = `86a7afa`（稳定分支，比上游 `a4af325` 领先 19 个提交）
+  - `experimental/harmony-performance` = `4b0cac3`（在 main 之上，+197/−15，性能）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
 - 上游 `upstream/main` = `a4af325`，已合并进 `main`，零冲突
 
 ## 交付物
 
-`output/procraft-harmony-signed.hap`（43941974 B, md5 `e995e2d4…`）
-`output/procraft-harmony-unsigned.hap`（43530387 B, md5 `0e3d4ff5…`）
+`output/procraft-harmony-signed.hap`（43938254 B, md5 `7ba063f8…`）
+`output/procraft-harmony-unsigned.hap`（43534103 B, md5 `f15749a0…`）
 均为 `0.0.5-beta` / versionCode 501 / minAPIVersion 50004016（API 16）/ targetAPI 60000020。
 
 ## 已完成并验证（HUAWEI MatePad 11.5''S，HarmonyOS 6.1.0 / API 24，2800×1840）
@@ -62,6 +62,9 @@
 | 空闲 CPU（图库静止） | 55%（每帧推 `ModifiersChanged`）→ 3.7% → 4.9%（16ms 轮询提问） | **0.2–0.45%** |
 | 笔刷形状+颗粒生成 | 533–674 ms | **355–384 ms** |
 | 画布管线建立 | 3.6–4.4 s（首帧之后后台） | 同（不挡界面） |
+
+`cargo clippy --release --lib --target aarch64-unknown-linux-ohos` **零警告零错误**（工作区开着
+`clippy::indexing-slicing` 与 `clippy::unsafe-op-in-unsafe-fn`）。
 
 空闲 CPU 的根因是 ArkTS 用 `setInterval(pump, 16)` 每帧问一次 `procraft.asks()`；
 现在改成 Rust 入队时通过 `napi_threadsafe_function` 唤醒页面（`procraft_set_ask_wake`），页面不再轮询。
