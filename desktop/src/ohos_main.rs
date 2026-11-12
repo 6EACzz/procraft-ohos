@@ -435,24 +435,12 @@ fn stop_before(stopping: Option<std::thread::JoinHandle<()>>) {
 /// This is called from the shell's own thread (the surface went), which is the thread the app's
 /// asks are answered on: waiting there for the app to finish would wait on the answer that thread
 /// alone can give, and hang the window for as long as the ask's own timeout. So the stopping is
-/// only asked for here; [`join_stopped`] waits, and is called from the app's next start instead.
+/// only asked for here; the app's next start waits, on its own thread ([`stop_before`]).
 fn stop_app() {
     if let Some(loop_) = WAKE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         // (the loop keeps what is open as it goes)
         loop_.stop();
     }
-}
-
-/// Waits for a stopping app's thread to have gone: called before another starts, which is the
-/// app's own thread (`procraft_start`), never the shell's.
-fn join_stopped() {
-    let running = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take();
-    let Some(running) = running else { return };
-    if running.join().is_err() {
-        log::error!("the app's thread stopped with a panic");
-    }
-    *SAID.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    *WAKE.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 /// The app's own loop: what the shell says, a frame when one is wanted, and the touches' waits.
@@ -484,7 +472,7 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         // what BACK would do here, for the page to ask (its own thread, so that the shell's never
         // waits on the app for it): whatever is open over the canvas, the artwork itself, or what
         // the gallery has open over it. With none of those, BACK is the system's own and leaves.
-        let back_here = app.ui.popover_open || app.session.is_some() || app.gallery.busy();
+        let back_here = app.ui.closes_something() || app.session.is_some() || app.gallery.busy();
         BACK_HERE.store(back_here, Ordering::Relaxed);
         // what the files written on their own threads had to say (a save that failed, an export
         // done): the desktop's loop says it each pass, and nothing else ever would
@@ -622,8 +610,8 @@ fn take(app: &mut App<TabletHost, TabletLoop>, said: Said) {
             // the gallery itself is all that shows is BACK the system's, and the page never sends
             // it here then (`procraft_can_go_back` says so).
             if code == KEYCODE_BACK && pressed && !repeat {
-                if app.ui.popover_open {
-                    // (the Escape below closes whichever panel, menu or field is open)
+                if app.ui.closes_something() {
+                    // (the Escape below closes whichever panel, menu, field or page is open)
                 } else if app.session.is_some() {
                     app.ui.actions.push(crate::ui::Action::Gallery);
                     return;

@@ -2570,6 +2570,15 @@ impl Interface {
             || self.settings)
     }
 
+    /// The interface has something of its own to close: a panel, a menu, a field, or a page over
+    /// the canvas. The port asks this of BACK, which closes what it finds here before it closes
+    /// anything of the app's (`ohos_main.rs`), and which the shell asks before it decides whether
+    /// BACK belongs to the app at all (`procraft_can_go_back`).
+    #[cfg_attr(not(target_env = "ohos"), allow(dead_code))]
+    pub fn closes_something(&self) -> bool {
+        self.popover_open || !self.canvas_shown()
+    }
+
     /// A hardware keyboard's shortcuts: the core's (keys.rs), and the desktop's files: Ctrl (⌘)
     /// with N, O, S (and Shift).
     fn shortcuts(&mut self, ctx: &egui::Context, session: &CanvasSession, info: &CanvasInfo) {

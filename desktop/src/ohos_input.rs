@@ -129,11 +129,6 @@ impl Input {
         Input { focused: true, density: pixels_per_point, ..Default::default() }
     }
 
-    /// Pixels per point, as the page's own density.
-    fn pixels_per_point(&self) -> f32 {
-        self.density
-    }
-
     /// A frame is wanted: woken from the render thread's wait.
     pub fn wake(&mut self) {
         self.wants_frame = true;

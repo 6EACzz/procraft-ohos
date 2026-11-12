@@ -53,6 +53,14 @@ impl Crop {
             self.open = false;
             return true;
         };
+        // Escape ends it as Cancel does, which a tablet's BACK sends: the canvas goes back to the
+        // size it had
+        if crate::ui::escape(ctx) {
+            session.crop_end(false);
+            self.open = false;
+            self.settings_open = false;
+            return true;
+        }
         let screen = ctx.content_rect();
         let ppp = ctx.pixels_per_point();
         egui::Area::new(Id::unique("crop")).fixed_pos(screen.min).order(Order::Middle).show(ctx, |ui| {

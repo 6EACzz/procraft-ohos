@@ -974,6 +974,13 @@ impl Studio {
         if !self.open {
             return None;
         }
+        // Escape closes it as the brush going back to how it opened, which a tablet's BACK sends:
+        // the studio is a page over everything, so nothing else would close it. A field being
+        // typed in takes the key first, as it does everywhere else.
+        if ctx.memory(|m| m.focused().is_none()) && crate::ui::escape(ctx) {
+            self.close(session, false);
+            return Some(Asked::Closed);
+        }
         self.plugin_rows = plugin_rows(&prefs.plugins);
         if self.preview_due.is_some_and(|due| Instant::now() >= due) {
             self.preview_due = None;
