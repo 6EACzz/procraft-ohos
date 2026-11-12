@@ -13,8 +13,8 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `86a7afa`（稳定分支，比上游 `a4af325` 领先 19 个提交）
-  - `experimental/harmony-performance` = `4b0cac3`（在 main 之上，+197/−15，性能）
+  - `main` = `862afb0`（稳定分支，比上游 `a4af325` 领先 20 个提交）
+  - `experimental/harmony-performance` = `6356b2b`（在 main 之上，+197/−15，性能）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
 - 上游 `upstream/main` = `a4af325`，已合并进 `main`，零冲突
@@ -55,6 +55,12 @@
 - 设置 → 帮助页「高级设置」→ Language 行可切换，整页即时重绘，写入 prefs 重启保持
 - 表里没有的字符串自动回退英文（egui `Id`、ffmpeg 参数、格式缩写、笔刷名、作品名等**故意**不翻）
 - `desktop/src/lang/zh.rs` 表 **1109 条**；重建：`python3 i18n/build_table.py`
+- **双指轻点撤销 / 三指重做**已验证（`crates/core/src/touch.rs` 的 `fingers_did_tap`；实测加一层后
+  双指轻点，Layer 2 被撤销掉、重做按钮变可用）。注意用 `uinput -T -m` 模拟时要传**成对的起点终点**
+  （`-m x1 y1 x2 y2 x1 y1 x2 y2 <ms>`），否则手指移动了就不是 tap，什么都不会发生
+- 图层 / 颜色 / 新建画布 / 设置 / 帮助页全部中文（`Layer 1` 这类是用户内容，不翻）
+- `cargo clippy --release --lib --target aarch64-unknown-linux-ohos` **零警告零错误**
+  （工作区开着 `clippy::indexing-slicing` 与 `clippy::unsafe-op-in-unsafe-fn`）
 
 ### 性能
 | 项目 | 之前 | 现在 |
