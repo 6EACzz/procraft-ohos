@@ -1,0 +1,222 @@
+# The tablet app, built from the tree as it stands and published as an unsigned HAP on a
+# pre-release:
+#
+#   Actions › HarmonyOS alpha › Run workflow      version 0.0.1 by default
+#
+# It is dispatched by hand and by nothing else, on purpose. The run makes the release, the release
+# makes the tag, and a tag push would start the run again — a loop that only ends when someone
+# notices. One dispatch, one build, one release.
+#
+# The release is tagged `harmony-v<version>-alpha` rather than `v<version>`: release.yml owns `v*`
+# and would read a tablet tag as an order for the Android, Windows, Linux and Mac apps.
+#
+# The HAP is unsigned, so `hdc install` refuses it until it is signed with a profile of one's own.
+# A profile is bound to a bundle name, and the one this port was built under is
+# `io.github.otd.harmonyTest`: change `bundleName` in harmony/AppScope/app.json5 to the name the
+# profile was made for, then sign the HAP with it.
+name: HarmonyOS alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to stamp on the HAP and name the release with (X.Y.Z)
+        required: false
+        default: "0.0.1"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: harmony-alpha
+  # a release is never cancelled halfway; a newer run waits its turn
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_VERSION: "1.99.0"
+  # Huawei's command line tools (hvigorw, ohpm, the SDK and its native toolchain) are a 2.3 GB
+  # download behind a developer account. This mirror republishes them for anyone, and the digest is
+  # the mirror's own: it is checked before a byte of it is run.
+  HARMONY_CLI_VERSION: "26.0.0.821"
+  HARMONY_CLI_SHA256: "0cbdf7ac5c1be1e42694d448ffaee0c0be0ba9a948197e2bc5b61ca5bdc481f2"
+
+jobs:
+  hap:
+    name: Unsigned HAP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        name: Resolve the version
+        env:
+          ASKED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          v="${ASKED:-0.0.1}"
+          if ! printf '%s' "$v" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "::error::'$v' is not a version like 1.2.3"
+            exit 1
+          fi
+          # the numbers HarmonyOS compares, by the scheme android/gradle.properties uses
+          IFS=. read -r major minor patch <<<"$v"
+          echo "version=$v" >>"$GITHUB_OUTPUT"
+          echo "code=$((major * 10000 + minor * 100 + patch))" >>"$GITHUB_OUTPUT"
+          echo "### HarmonyOS v$v (\`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
+
+      # hvigor is a JVM program, and the port's toolchain was checked against Java 17
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-unknown-linux-ohos
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: harmony-${{ env.HARMONY_CLI_VERSION }}
+
+      # hvigor's texture compression is a native program that links against OpenGL
+      - name: Install what the toolchain links against
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1-mesa-dev
+
+      # The tools are 2.3 GB compressed and 4.1 GB unpacked, which is most of a runner's disk, so
+      # they are downloaded, used and left to the runner's own cleanup. Caching them was tried and
+      # dropped: one entry that size is over a fifth of the repository's 10 GB of cache and would
+      # evict the Rust cache that keeps the build itself quick, to save a download from GitHub's
+      # own CDN.
+      - name: Install the HarmonyOS command line tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/ohos-cli"
+          cd "$HOME/ohos-cli"
+          base="https://github.com/ErBWs/ohos-sdk/releases/download/${HARMONY_CLI_VERSION}"
+          for part in aa ab; do
+            curl -fsSL --retry 3 --retry-delay 2 "$base/ohos-sdk-linux-amd64.tar.gz.$part" -o "ohos-sdk-linux-amd64.tar.gz.$part"
+          done
+          cat ohos-sdk-linux-amd64.tar.gz.aa ohos-sdk-linux-amd64.tar.gz.ab >ohos-sdk-linux-amd64.tar.gz
+          rm -f ohos-sdk-linux-amd64.tar.gz.a?
+          # the digest this file pins, checked before a byte of it is run
+          echo "$HARMONY_CLI_SHA256  ohos-sdk-linux-amd64.tar.gz" | sha256sum --check
+          mkdir -p "$HOME/ohos-tools"
+          tar -xzf ohos-sdk-linux-amd64.tar.gz -C "$HOME/ohos-tools"
+          rm -f ohos-sdk-linux-amd64.tar.gz
+          root="$HOME/ohos-tools/command-line-tools"
+          test -x "$root/bin/hvigorw"
+          test -x "$root/bin/ohpm"
+          test -d "$root/tool/node"
+          test -f "$root/sdk/default/openharmony/native/build/cmake/ohos.toolchain.cmake"
+          # hvigorw runs on the Node it ships, and finds the SDK through this
+          echo "$root/tool/node/bin" >>"$GITHUB_PATH"
+          echo "$root/bin" >>"$GITHUB_PATH"
+          echo "DEVECO_SDK_HOME=$root/sdk" >>"$GITHUB_ENV"
+          df -h "$HOME" | tail -1
+
+      # Two files say which version the app is, and both have to agree with the release: the HAP's
+      # manifest (`versionName` is what the system shows, `versionCode` is what it compares), and
+      # android/gradle.properties, which `desktop/build.rs` reads to give the code
+      # `PROCRAFT_VERSION` — the string the About page and every saved file carry. Neither is
+      # committed: a build carries the number it was released under, and the tree keeps its own.
+      - name: Stamp the version on the app
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          CODE: ${{ steps.v.outputs.code }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, re
+
+          version, code = os.environ["VERSION"], os.environ["CODE"]
+
+          # the manifest is edited as text rather than parsed and re-dumped, so that its shape and
+          # its key order are the port's rather than Python's
+          manifest = pathlib.Path("harmony/AppScope/app.json5")
+          text = manifest.read_text()
+          for key, value in (("versionCode", code), ("versionName", f'"{version}"')):
+              text, n = re.subn(rf'("{key}"\s*:\s*)(?:"[^"]*"|[^,\n}}]+)', rf'\g<1>{value}', text, count=1)
+              if n != 1:
+                  raise SystemExit(f"could not set {key} in {manifest}")
+          manifest.write_text(text)
+
+          properties = pathlib.Path("android/gradle.properties")
+          text = properties.read_text()
+          for key, value in (("procraft.version", version), ("procraft.versionCode", code)):
+              text, n = re.subn(rf'(?m)^{re.escape(key)}=.*$', f"{key}={value}", text, count=1)
+              if n != 1:
+                  raise SystemExit(f"could not set {key} in {properties}")
+          properties.write_text(text)
+
+          print(f"the app will call itself {version} ({code})")
+          PY
+          git diff --stat harmony/AppScope/app.json5 android/gradle.properties
+
+      - name: Build the HAP
+        run: bash harmony/build.sh
+
+      - id: hap
+        name: Name the HAP after its version
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          built=harmony/entry/build/default/outputs/default/entry-default-unsigned.hap
+          test -s "$built"
+          out="$RUNNER_TEMP/procraft-$VERSION-harmony-arm64-unsigned.hap"
+          cp "$built" "$out"
+          ( cd "$RUNNER_TEMP" && sha256sum "$(basename "$out")" > SHA256SUMS )
+          echo "path=$out" >>"$GITHUB_OUTPUT"
+          ls -lh "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: procraft-${{ steps.v.outputs.version }}-harmony-arm64-unsigned
+          path: |
+            ${{ steps.hap.outputs.path }}
+            ${{ runner.temp }}/SHA256SUMS
+          if-no-files-found: error
+
+      # A second run of the same version replaces its files rather than failing on what the first
+      # one left, which is what one wants when the first run was the one that broke.
+      - name: Publish the alpha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          HAP: ${{ steps.hap.outputs.path }}
+        run: |
+          set -euo pipefail
+          tag="harmony-v$VERSION-alpha"
+          cat >"$RUNNER_TEMP/notes.md" <<'EOF'
+          ProCraft on HarmonyOS, built from this commit.
+
+          **This HAP is unsigned.** `hdc install` refuses it until it is signed with a profile of
+          your own, and a profile is bound to a bundle name: change `bundleName` in
+          `harmony/AppScope/app.json5` to the name your profile was made for, then sign the HAP
+          with it.
+
+          What it needs: HarmonyOS 6 or later on a 64-bit ARM tablet, API 16 or later (the app finds
+          its own files through `OH_AbilityRuntime_ApplicationContextGetFilesDir`, which arrived in
+          16). It draws through OpenGL ES 3.2, so it runs on a device whose Vulkan the port cannot
+          reach — which, on HarmonyOS, is most of them.
+
+          The interface is in English or Chinese, switched in Help › Advanced settings › Language.
+          EOF
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$HAP" "$RUNNER_TEMP/SHA256SUMS" --clobber
+            gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes.md" --prerelease
+            echo "replaced the files on $tag" >>"$GITHUB_STEP_SUMMARY"
+          else
+            gh release create "$tag" "$HAP" "$RUNNER_TEMP/SHA256SUMS" \
+              --title "ProCraft for HarmonyOS v$VERSION-alpha" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+            echo "made $tag" >>"$GITHUB_STEP_SUMMARY"
+          fi
