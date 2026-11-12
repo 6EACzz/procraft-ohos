@@ -504,18 +504,16 @@ struct Index {
   private steps: number = 0;
 
   private showKeyboard(): void {
-    // the app's own text field has the focus: the system's keyboard, over it. It is asked for on
-    // the next turn, not this one: `focusable(this.typing)` only becomes true once the field has
-    // been redrawn, and asking in the same turn asks for a field that is still not focusable
-    // (which throws 150001 and, uncaught inside this timer, stops the whole process as a Js Error)
+    // the app's own text field has the focus: the system's keyboard, over it. The field is always
+    // focusable and always in the tree (it is one pixel and invisible until now), so the focus can
+    // be asked for here rather than after a redraw — asking before the field could be focused threw
+    // 150001 and, uncaught inside a timer, stopped the whole process as a Js Error
     this.typing = true;
-    setTimeout(() => {
-      try {
-        this.getUIContext().getFocusController().requestFocus('procraft-typing');
-      } catch (error) {
-        hilog.warn(0x3200, TAG, 'the keyboard: %{public}s', this.why(error));
-      }
-    }, 0);
+    try {
+      this.getUIContext().getFocusController().requestFocus('procraft-typing');
+    } catch (error) {
+      hilog.warn(0x3200, TAG, 'the keyboard: %{public}s', this.why(error));
+    }
   }
 
   private hideKeyboard(): void {
@@ -634,7 +632,10 @@ struct Index {
         .width(1)
         .height(1)
         .opacity(this.typing ? 1 : 0)
-        .focusable(this.typing)
+        // always focusable, though: whether it can be focused must not depend on a redraw having
+        // happened by the time the focus is asked for, and a one-pixel field that is invisible
+        // costs nothing while no keyboard is up
+        .focusable(true)
         // what the keyboard actually enters, rather than the field's whole text: the field keeps
         // nothing (every insert clears it), so its text saying nothing is not a keyboard saying
         // nothing — and a backspace takes text away instead of adding it, which a comparison of

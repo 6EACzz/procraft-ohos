@@ -520,6 +520,10 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         // time and never getting one that shows.
         if let Some(fine) = app.host.as_mut().and_then(|h| h.canvases_made()) {
             app.canvases_made(fine, &loop_);
+            // the gallery's note that they are being made goes with the next frame, and a wake
+            // alone would leave the frame that still says it on the screen for good: the desktop
+            // asks for a redraw here for the same reason
+            app.again = Some(Instant::now());
             loop_.wake();
         }
         // whatever the touches' waits have made of it is in before the frame draws it
