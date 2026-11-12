@@ -238,7 +238,9 @@ impl OhosScreen {
     /// It is egui's *native* scale (its zoom stays 1.0, as the desktop's does), so it is handed
     /// over with the viewport's own info each frame, never as a zoom.
     pub fn set_pixels_per_point(&mut self, pixels_per_point: f32) {
-        if !(pixels_per_point > 0.1) {
+        // (a comparison that must hold rather than a negated one: a density is a float, and
+        // `!(x > 0.1)` also lets a not-a-number through, which would be laid out as one)
+        if !(pixels_per_point.is_finite() && pixels_per_point > 0.1) {
             return;
         }
         self.pixels_per_point = pixels_per_point;
@@ -342,11 +344,13 @@ impl OhosScreen {
         // the window's own size, which the frame is drawn at (a default viewport would have egui
         // guess a size of its own, and lay the interface out for it), and the page's own density
         let rect = raw.screen_rect.unwrap_or(egui::Rect::ZERO);
-        let mut info = egui::ViewportInfo::default();
-        info.native_pixels_per_point = Some(self.pixels_per_point);
-        info.inner_rect = Some(rect);
-        info.outer_rect = Some(rect);
-        info.focused = Some(focused);
+        let info = egui::ViewportInfo {
+            native_pixels_per_point: Some(self.pixels_per_point),
+            inner_rect: Some(rect),
+            outer_rect: Some(rect),
+            focused: Some(focused),
+            ..Default::default()
+        };
         raw.viewports.insert(egui::ViewportId::ROOT, info);
         raw
     }
@@ -404,7 +408,7 @@ impl OhosScreen {
         for id in std::mem::take(&mut textures_delta.free) {
             self.renderer.free_texture(&id);
         }
-        let Some(config) = self.config.as_ref() else { return None };
+        let config = self.config.as_ref()?;
         let size = (config.width, config.height);
         let (format, screen) = (config.format, screen_profile(config));
         let frame = match self.surface.get_current_texture() {

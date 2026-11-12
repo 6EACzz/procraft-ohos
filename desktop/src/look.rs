@@ -227,7 +227,7 @@ pub static INTER_FACES: [(Weight, &[u8]); 4] = [
 pub fn install_fonts(ctx: &egui::Context) {
     // once for each context: the system's are tens of megabytes read off the disk, and this is
     // called wherever a context is made (the app's once, a test's each time)
-    let installed = egui::Id::new("procraft fonts installed");
+    let installed = egui::Id::unique("procraft fonts installed");
     if ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or(installed, false), true)) {
         return;
     }

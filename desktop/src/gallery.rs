@@ -336,6 +336,9 @@ const LIFTED: (f32, f32) = (1.07, 0.25);
 const DROPPED: (f32, f32) = (1.0, 0.25);
 
 impl Gallery {
+    // `new` opens the store, which a `Default` cannot say it does: the gallery is not a plain
+    // collection of noughts, and a caller that wants one says so
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Gallery {
         let store = ArtworkStore::open(crate::files::app_dir().join("artworks").to_string_lossy().into_owned());
         let presets = presets_from_json(std::fs::read_to_string(presets_path()).ok());

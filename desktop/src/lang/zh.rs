@@ -1118,10 +1118,10 @@ static TABLE: [(&str, &str); 1109] = [
 
 /// The Chinese `text` is shown as, if the table has it.
 pub fn zh(text: &str) -> Option<&'static str> {
-    TABLE
-        .binary_search_by(|(english, _)| (*english).cmp(text))
-        .ok()
-        .map(|at| TABLE[at].1)
+    // the index is the one the search just found, so it is in the table by construction; the
+    // `?` is what says so to a reader rather than a panic that cannot happen
+    let at = TABLE.binary_search_by(|(english, _)| (*english).cmp(text)).ok()?;
+    TABLE.get(at).map(|(_, chinese)| *chinese)
 }
 
 /// The Chinese for words the code built itself (`format!` and the like): the table's own entry

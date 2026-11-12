@@ -34,7 +34,8 @@ pub fn files_dir() -> Option<PathBuf> {
         return None;
     }
     let length = (written as usize).min(ROOM);
-    let kept = &buffer[..length];
+    // the count is the system's, so it is clamped to the room it was given rather than trusted
+    let kept = buffer.get(..length)?;
     // (it may count its terminating nothing; the path is what comes before it)
     let text = kept.split(|b| *b == 0).next().unwrap_or(kept);
     let dir = std::str::from_utf8(text).ok().filter(|d| !d.is_empty())?;

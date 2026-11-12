@@ -214,7 +214,7 @@ impl Alert {
             let ink = argb(INK);
             // the title, after its icon, centred
             let title_y = panel.top() + 21.0 + 31.0 / 2.0;
-            let words = crate::look::text_width(&painter, &asking.title, 26.0, Weight::Bold);
+            let words = crate::look::text_width(painter, &asking.title, 26.0, Weight::Bold);
             let icon_w = if asking.icon.is_some() { 24.0 + 8.0 } else { 0.0 };
             let left = panel.center().x - (icon_w + words) / 2.0;
             if let Some(icon) = asking.icon {

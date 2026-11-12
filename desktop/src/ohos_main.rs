@@ -328,7 +328,8 @@ pub unsafe extern "C" fn procraft_own_folder(bytes: *const u8, length: usize) {
     if bytes.is_null() || length == 0 {
         return;
     }
-    let slice = std::slice::from_raw_parts(bytes, length);
+    // SAFETY: the caller's contract, above: `length` readable bytes
+    let slice = unsafe { std::slice::from_raw_parts(bytes, length) };
     if let Ok(dir) = std::str::from_utf8(slice) {
         crate::files::set_own_folder(dir);
         log::info!("the app's own files go in {dir}");
@@ -394,7 +395,7 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
             // which is the only thread that could show it, so showing it here would wait on
             // itself and the message would never come)
             log::error!("the window's surface couldn't be set up: {e}");
-            crate::ohos_platform::say_unwaited("ProCraft", &format!("{e}"), true);
+            crate::ohos_platform::say_unwaited("ProCraft", &e, true);
             return;
         }
     };
@@ -864,7 +865,7 @@ fn frame(app: &mut App<TabletHost, TabletLoop>) {
 
 /// The window's surface is gone (the XComponent went away, or the app is ending).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_surface_destroyed() {
+pub extern "C" fn procraft_surface_destroyed() {
     // the app keeps what is open and its thread stops: another surface starts it again (the page
     // turned, the window resized, the app brought back), which waits for this one to have gone
     tell(Said::Stop);
@@ -873,13 +874,13 @@ pub unsafe extern "C" fn procraft_surface_destroyed() {
 
 /// A frame is to be drawn now (a touch came, a key did, the interface asked).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_wake() {
+pub extern "C" fn procraft_wake() {
     tell(Said::Wake);
 }
 
 /// A touch came: `phase` is 0 (down), 1 (move), 2 (up) or 3 (cancel).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_touch(
+pub extern "C" fn procraft_touch(
     id: u64,
     phase: u32,
     x: f64,
@@ -895,29 +896,33 @@ pub unsafe extern "C" fn procraft_touch(
 
 /// A pen is near but not touching.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_hover(id: u64, x: f64, y: f64, tilt: f64, orientation: f64, eraser: bool) {
+pub extern "C" fn procraft_hover(id: u64, x: f64, y: f64, tilt: f64, orientation: f64, eraser: bool) {
     tell(Said::Hover { id, x, y, tilt, orientation, eraser });
 }
 
 /// A pen left the tablet's reach.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_hover_out(id: u64) {
+pub extern "C" fn procraft_hover_out(id: u64) {
     tell(Said::HoverOut { id });
 }
 
 /// A key went down or up: `code` is the system's key code, `text` what it types (0 for none).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_key(code: u32, text: u32, pressed: bool, repeat: bool) {
+pub extern "C" fn procraft_key(code: u32, text: u32, pressed: bool, repeat: bool) {
     tell(Said::Key { code, text, pressed, repeat });
 }
 
 /// What a soft keyboard typed (UTF-8).
+///
+/// # Safety
+/// `bytes` is `length` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_text(bytes: *const u8, length: usize) {
     if bytes.is_null() || length == 0 {
         return;
     }
-    let slice = std::slice::from_raw_parts(bytes, length);
+    // SAFETY: the caller's contract, above: `length` readable bytes
+    let slice = unsafe { std::slice::from_raw_parts(bytes, length) };
     if let Ok(text) = std::str::from_utf8(slice) {
         tell(Said::Text(text.to_owned()));
     }
@@ -925,19 +930,19 @@ pub unsafe extern "C" fn procraft_text(bytes: *const u8, length: usize) {
 
 /// The window's size changed (the panel turned, or its window did).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_resized(width: u32, height: u32) {
+pub extern "C" fn procraft_resized(width: u32, height: u32) {
     tell(Said::Resized { width, height });
 }
 
 /// The page's density (its points to pixels).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_scale(pixels_per_point: f32) {
+pub extern "C" fn procraft_scale(pixels_per_point: f32) {
     tell(Said::Scale { pixels_per_point });
 }
 
 /// The app went to the background, or came back.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn procraft_focused(focused: bool) {
+pub extern "C" fn procraft_focused(focused: bool) {
     tell(Said::Focused(focused));
 }
 
@@ -950,12 +955,16 @@ pub extern "C" fn procraft_can_go_back() -> bool {
 }
 
 /// A file was opened with the app (a picture, an artwork), its path as UTF-8.
+///
+/// # Safety
+/// `bytes` is `length` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_dropped_file(bytes: *const u8, length: usize) {
     if bytes.is_null() || length == 0 {
         return;
     }
-    let slice = std::slice::from_raw_parts(bytes, length);
+    // SAFETY: the caller's contract, above: `length` readable bytes
+    let slice = unsafe { std::slice::from_raw_parts(bytes, length) };
     if let Ok(path) = std::str::from_utf8(slice) {
         tell(Said::Dropped(path.to_owned()));
     }
@@ -987,7 +996,8 @@ pub extern "C" fn procraft_asks() -> *mut std::ffi::c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn procraft_asks_free(text: *mut std::ffi::c_char) {
     if !text.is_null() {
-        drop(std::ffi::CString::from_raw(text));
+        // SAFETY: the caller's contract, above: what `procraft_asks` gave, given back once
+        drop(unsafe { std::ffi::CString::from_raw(text) });
     }
 }
 
@@ -1007,7 +1017,8 @@ pub unsafe extern "C" fn procraft_answer(
         if pointer.is_null() {
             return None;
         }
-        std::ffi::CStr::from_ptr(pointer).to_str().ok().map(str::to_owned)
+        // SAFETY: the caller's contract, above: UTF-8 the shell owns, read only while this runs
+        unsafe { std::ffi::CStr::from_ptr(pointer) }.to_str().ok().map(str::to_owned)
     };
     let paths = text(paths).map(|p| p.lines().map(str::to_owned).filter(|l| !l.is_empty()).collect()).unwrap_or_default();
     let clipboard = text(clipboard).and_then(|c| crate::ohos_platform::clipboard_of(&c));

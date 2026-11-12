@@ -366,7 +366,7 @@ impl ColourDrop {
                 let ink = argb(INK);
                 let blue = argb(pc::ACCENT);
                 // "ColorDrop", then the tick that ends filling or the offer to continue
-                let name = crate::look::text_width(&painter, "ColorDrop", 16.5, Weight::Bold);
+                let name = crate::look::text_width(painter, "ColorDrop", 16.5, Weight::Bold);
                 let button = vec2(if what == Band::Filling { 20.0 } else { 101.0 }, 20.0);
                 let left = band.center().x - (name + 13.0 + button.x) / 2.0;
                 text(painter, pos2(left, band.center().y), Align2::LEFT_CENTER, "ColorDrop", 16.5, Weight::Bold, ink);

@@ -148,7 +148,7 @@ impl ExportCard {
             // the title after the share glyph (22 tall: 18.6 of its 50 frame), 13 between
             let title_y = card.top() + 21.0 + 31.0 / 2.0;
             let ink = argb(INK);
-            let words = crate::look::text_width(&painter, "Exporting", 26.0, Weight::Bold);
+            let words = crate::look::text_width(painter, "Exporting", 26.0, Weight::Bold);
             let left = card.center().x - (22.0 + 13.0 + words) / 2.0;
             look.icon(ui, &crate::icons::TAB_SHARE, pos2(left + 11.0, title_y), 59.0, argb(pc::ACCENT));
             text(ui.painter(), pos2(left + 35.0, title_y), Align2::LEFT_CENTER, "Exporting", 26.0, Weight::Bold, ink);
