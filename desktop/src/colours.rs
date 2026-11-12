@@ -1761,7 +1761,7 @@ impl Colours {
                 let lettering = if bright { Color32::BLACK } else { Color32::WHITE };
                 let mut job = egui::text::LayoutJob::default();
                 job.append(
-                    &procraft_core::colour_name(rgb),
+                    &crate::lang::tr_cow(&procraft_core::colour_name(rgb)),
                     0.0,
                     egui::TextFormat {
                         font_id: Weight::Regular.font(15.0),

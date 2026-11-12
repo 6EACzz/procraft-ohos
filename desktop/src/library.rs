@@ -1108,7 +1108,7 @@ impl Library {
             return (response, rect);
         }
         let mut job = LayoutJob::default();
-        job.append(&set.name, 0.0, format(14.0, Weight::SemiBold, ink));
+        job.append(&crate::lang::tr_cow(&set.name), 0.0, format(14.0, Weight::SemiBold, ink));
         job.wrap = TextWrapping {
             max_width: rect.right() - 8.0 - left,
             max_rows: 2,
