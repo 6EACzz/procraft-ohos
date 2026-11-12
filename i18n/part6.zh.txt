@@ -1,0 +1,52 @@
+Finger strokes smudge	手指描边会涂抹
+Pen strokes smudge	触控笔描边会涂抹
+Finger strokes smudge while □ is held down	按住 □ 时，手指描边会涂抹
+Pen strokes smudge while □ is held down	按住 □ 时，触控笔描边会涂抹
+Finger strokes erase	手指描边会擦除
+Pen strokes erase	触控笔描边会擦除
+Finger strokes erase while □ is held down	按住 □ 时，手指描边会擦除
+Pen strokes erase while □ is held down	按住 □ 时，触控笔描边会擦除
+Turns drawing assist on or off for this layer	打开或关闭此图层的绘图辅助
+Finger strokes follow the drawing guide	手指描边会跟随绘图参考线
+Pen strokes follow the drawing guide	触控笔描边会跟随绘图参考线
+Finger strokes follow the guide while □ is held down	按住 □ 时，手指描边会跟随绘图参考线
+Pen strokes follow the guide while □ is held down	按住 □ 时，触控笔描边会跟随绘图参考线
+Opens or closes the eyedropper	打开或关闭吸管
+A finger on the canvas picks a colour	手指在画布上取色
+A finger picks a colour while □ is held down	按住 □ 时，用手指取色
+The pen picks a colour while □ is held down	按住 □ 时，用触控笔取色
+Opens the eyedropper	打开吸管
+A finger kept still on the canvas picks a colour	手指在画布上停住不动即可取色
+Turns the last stroke into a shape	将最后一条描边转换为形状
+A finger touch turns the last stroke into a shape	手指轻点将最后一条描边转换为形状
+Three fingers swiped down turn the last stroke into a shape	三指下滑将最后一条描边转换为形状
+Four fingers tapped turn the last stroke into a shape	四指轻点将最后一条描边转换为形状
+Opens or closes the quick menu	打开或关闭快捷菜单
+A finger touch opens the quick menu	手指轻点打开快捷菜单
+A finger opens the quick menu while □ is held down	按住 □ 时，用手指打开快捷菜单
+The pen opens the quick menu while □ is held down	按住 □ 时，用触控笔打开快捷菜单
+Three fingers swiped down open the quick menu	三指下滑打开快捷菜单
+Four fingers tapped open or close the quick menu	四指轻点打开或关闭快捷菜单
+Opens the quick menu	打开快捷菜单
+A finger kept still on the canvas opens the quick menu	手指在画布上停住不动即可打开快捷菜单
+A finger touch shows or hides the interface	手指轻点显示或隐藏界面
+Three fingers swiped down show or hide the interface	三指下滑显示或隐藏界面
+Four fingers tapped show or hide the interface	四指轻点显示或隐藏界面
+Shows or hides the interface	显示或隐藏界面
+Rubbing three fingers back and forth clears the layer	三指来回滑动清除图层
+Three fingers swiped down clear the layer	三指下滑清除图层
+Four fingers tapped clear the layer	四指轻点清除图层
+Clears the layer	清除图层
+A finger kept still on the canvas clears the layer	手指在画布上停住不动即可清除图层
+Opens the copy and paste menu	打开拷贝与粘贴菜单
+A finger touch opens the copy and paste menu	手指轻点打开拷贝与粘贴菜单
+A finger opens the copy and paste menu while □ is held down	按住 □ 时，用手指打开拷贝与粘贴菜单
+The pen opens the copy and paste menu while □ is held down	按住 □ 时，用触控笔打开拷贝与粘贴菜单
+Three fingers swiped down open the copy and paste menu	三指下滑打开拷贝与粘贴菜单
+Four fingers tapped open the copy and paste menu	四指轻点打开拷贝与粘贴菜单
+A finger kept still on the canvas opens the copy and paste menu	手指在画布上停住不动即可打开拷贝与粘贴菜单
+A finger touch picks the layer drawn there	手指轻点选择该处绘制的图层
+A finger picks the layer drawn there while □ is held down	按住 □ 时，用手指选择该处绘制的图层
+The pen picks the layer drawn there while □ is held down	按住 □ 时，用触控笔选择该处绘制的图层
+Picks the layer drawn under the pen	选择触控笔下方绘制的图层
+A finger kept still picks the layer drawn there	手指停住不动即可选择该处绘制的图层

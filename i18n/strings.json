@@ -29,7 +29,52 @@
 "3d preview": [
 "studio.rs"
 ],
+"A finger kept still on the canvas clears the layer": [
+"crates/core/src/gestures.rs"
+],
+"A finger kept still on the canvas opens the copy and paste menu": [
+"crates/core/src/gestures.rs"
+],
+"A finger kept still on the canvas opens the quick menu": [
+"crates/core/src/gestures.rs"
+],
+"A finger kept still on the canvas picks a colour": [
+"crates/core/src/gestures.rs"
+],
+"A finger kept still picks the layer drawn there": [
+"crates/core/src/gestures.rs"
+],
+"A finger on the canvas picks a colour": [
+"crates/core/src/gestures.rs"
+],
+"A finger opens the copy and paste menu while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"A finger opens the quick menu while □ is held down": [
+"crates/core/src/gestures.rs"
+],
 "A finger paints a model; with □ held it turns it": [
+"crates/core/src/gestures.rs"
+],
+"A finger picks a colour while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"A finger picks the layer drawn there while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"A finger touch opens the copy and paste menu": [
+"crates/core/src/gestures.rs"
+],
+"A finger touch opens the quick menu": [
+"crates/core/src/gestures.rs"
+],
+"A finger touch picks the layer drawn there": [
+"crates/core/src/gestures.rs"
+],
+"A finger touch shows or hides the interface": [
+"crates/core/src/gestures.rs"
+],
+"A finger touch turns the last stroke into a shape": [
 "crates/core/src/gestures.rs"
 ],
 "A fitted canvas keeps clear of the top bar and the sidebar.": [
@@ -496,6 +541,9 @@
 ],
 "Clear the layer": [
 "crates/core/src/keys.rs"
+],
+"Clears the layer": [
+"crates/core/src/gestures.rs"
 ],
 "Clipboard": [
 "crates/core/src/quick_menu.rs"
@@ -970,6 +1018,24 @@
 "Find": [
 "library.rs"
 ],
+"Finger strokes erase": [
+"crates/core/src/gestures.rs"
+],
+"Finger strokes erase while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"Finger strokes follow the drawing guide": [
+"crates/core/src/gestures.rs"
+],
+"Finger strokes follow the guide while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"Finger strokes smudge": [
+"crates/core/src/gestures.rs"
+],
+"Finger strokes smudge while □ is held down": [
+"crates/core/src/gestures.rs"
+],
 "Finishing the fill…": [
 "app.rs"
 ],
@@ -1040,6 +1106,21 @@
 ],
 "Foreground": [
 "animation.rs"
+],
+"Four fingers tapped clear the layer": [
+"crates/core/src/gestures.rs"
+],
+"Four fingers tapped open or close the quick menu": [
+"crates/core/src/gestures.rs"
+],
+"Four fingers tapped open the copy and paste menu": [
+"crates/core/src/gestures.rs"
+],
+"Four fingers tapped show or hide the interface": [
+"crates/core/src/gestures.rs"
+],
+"Four fingers tapped turn the last stroke into a shape": [
+"crates/core/src/gestures.rs"
 ],
 "Four-finger tap": [
 "crates/core/src/gestures.rs"
@@ -1789,6 +1870,21 @@
 "Opening…": [
 "app.rs"
 ],
+"Opens or closes the eyedropper": [
+"crates/core/src/gestures.rs"
+],
+"Opens or closes the quick menu": [
+"crates/core/src/gestures.rs"
+],
+"Opens the copy and paste menu": [
+"crates/core/src/gestures.rs"
+],
+"Opens the eyedropper": [
+"crates/core/src/gestures.rs"
+],
+"Opens the quick menu": [
+"crates/core/src/gestures.rs"
+],
 "Options": [
 "guide_editor.rs"
 ],
@@ -1878,6 +1974,24 @@
 "Pen second button": [
 "crates/core/src/gestures.rs"
 ],
+"Pen strokes erase": [
+"crates/core/src/gestures.rs"
+],
+"Pen strokes erase while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"Pen strokes follow the drawing guide": [
+"crates/core/src/gestures.rs"
+],
+"Pen strokes follow the guide while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"Pen strokes smudge": [
+"crates/core/src/gestures.rs"
+],
+"Pen strokes smudge while □ is held down": [
+"crates/core/src/gestures.rs"
+],
 "Pencil": [
 "adjustments.rs"
 ],
@@ -1915,6 +2029,9 @@
 ],
 "Picking color from reference": [
 "overlays.rs"
+],
+"Picks the layer drawn under the pen": [
+"crates/core/src/gestures.rs"
 ],
 "Pictures": [
 "canvas_info.rs",
@@ -2234,6 +2351,9 @@
 "Roundness Vertical Jitter": [
 "studio.rs"
 ],
+"Rubbing three fingers back and forth clears the layer": [
+"crates/core/src/gestures.rs"
+],
 "Saturation": [
 "adjustments.rs",
 "layers.rs",
@@ -2406,6 +2526,9 @@
 ],
 "Show while painting": [
 "actions.rs"
+],
+"Shows or hides the interface": [
+"crates/core/src/gestures.rs"
 ],
 "Sign here": [
 "canvas_info.rs"
@@ -2620,6 +2743,18 @@
 "The palettes couldn't be kept.": [
 "ui.rs"
 ],
+"The pen opens the copy and paste menu while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"The pen opens the quick menu while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"The pen picks a colour while □ is held down": [
+"crates/core/src/gestures.rs"
+],
+"The pen picks the layer drawn there while □ is held down": [
+"crates/core/src/gestures.rs"
+],
 "The photo couldn't be kept.": [
 "canvas_info.rs"
 ],
@@ -2667,6 +2802,21 @@
 ],
 "Those meshes aren't in the same texture set": [
 "layers.rs"
+],
+"Three fingers swiped down clear the layer": [
+"crates/core/src/gestures.rs"
+],
+"Three fingers swiped down open the copy and paste menu": [
+"crates/core/src/gestures.rs"
+],
+"Three fingers swiped down open the quick menu": [
+"crates/core/src/gestures.rs"
+],
+"Three fingers swiped down show or hide the interface": [
+"crates/core/src/gestures.rs"
+],
+"Three fingers swiped down turn the last stroke into a shape": [
+"crates/core/src/gestures.rs"
 ],
 "Three-finger swipe": [
 "crates/core/src/gestures.rs"
@@ -2776,6 +2926,12 @@
 ],
 "Turn on": [
 "actions.rs"
+],
+"Turns drawing assist on or off for this layer": [
+"crates/core/src/gestures.rs"
+],
+"Turns the last stroke into a shape": [
+"crates/core/src/gestures.rs"
 ],
 "Twirl Left": [
 "liquify.rs"
