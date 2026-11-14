@@ -13,7 +13,6 @@ mod animation;
 mod canvas_info;
 mod chrome;
 mod colour_drop;
-mod colour_models;
 mod colours;
 mod compact_colours;
 mod companion;
@@ -62,6 +61,7 @@ mod system_clipboard;
 mod text;
 mod timelapse;
 mod tool_header;
+mod touch_keyboard;
 mod transform;
 mod transform_numeric;
 mod ui;
@@ -396,6 +396,8 @@ impl ApplicationHandler for App {
         // was at risk when it stopped
         let order = startup::backend_order();
         let from = startup::gpu_start(order);
+        // the canvases' pipelines kept between runs, where the GPU can
+        procraft_gpu::keep_pipelines_in(files::app_dir());
         // what the start waits for logged while it does
         startup::watch_start(self.wake.clone());
         let tried = startup::gpu_tried();
@@ -434,6 +436,17 @@ impl ApplicationHandler for App {
         let Some(event) = self.tap_assist(event) else { return };
         let Some(screen) = self.screen.as_mut() else { return };
         let session = self.session.clone();
+        // a finger or a pen pressing brings the on-screen keyboard up for a field it focuses (a
+        // tablet's pen that moves the mouse as well as the system's pen)
+        match &event {
+            WindowEvent::Touch(t) if t.phase == winit::event::TouchPhase::Started => {
+                screen.touch_keyboard.touched(Instant::now());
+            }
+            WindowEvent::MouseInput { state: winit::event::ElementState::Pressed, .. } => {
+                screen.touch_keyboard.clicked(crate::pen::mouse_pen().is_some(), Instant::now());
+            }
+            _ => {}
+        }
         // on the canvas Ctrl+X, C and V are the app's shortcuts (a layer cut, copied or pasted,
         // from a clipboard of its own, the system's perhaps empty); a text field keeps them for
         // the system's clipboard
@@ -1379,6 +1392,12 @@ impl App {
             }
             Action::Export(format, pdf_quality) => {
                 files::export(session, format, self.ui.artwork_dir.as_deref(), pdf_quality, &mut self.ui.export_card);
+                None
+            }
+            Action::PluginExport(i) => {
+                if let Some(export) = session.plugin_exports().into_iter().nth(usize::from(i)) {
+                    files::export_plugin(session, &export.key, &mut self.ui.export_card);
+                }
                 None
             }
         };

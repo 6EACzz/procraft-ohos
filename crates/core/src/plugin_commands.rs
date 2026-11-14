@@ -156,7 +156,11 @@ fn rect_on(size: (u32, u32), x: i32, y: i32, w: i32, h: i32) -> Option<(IRect, u
 
 /// A layer that can be painted on: a pixel layer, not locked.
 fn paintable(session: &CanvasSession, id: u64) -> bool {
-    session.layers().iter().any(|l| l.id == id && !l.locked && l.kind == crate::layers::LayerType::Paint)
+    // (a plugin's layer is its own plugin's: its pixels are drawn from its items)
+    session
+        .layers()
+        .iter()
+        .any(|l| l.id == id && !l.locked && l.kind == crate::layers::LayerType::Paint && l.plugin_kind.is_none())
 }
 
 /// A plugin's change of the artwork in progress (see [`CanvasSession::plugin_step`]): what it
@@ -175,7 +179,10 @@ impl CanvasSession {
     pub(crate) fn plugin_step(&self) -> PluginStep<'_> {
         let mut st = self.shared.lock();
         st.finish_stroke();
-        if let Some(canvas) = st.canvas.as_mut() {
+        // (one inside another, an event told during an action, joins its step)
+        if st.plugin_stepping == 0
+            && let Some(canvas) = st.canvas.as_mut()
+        {
             canvas.mark_steps();
         }
         st.plugin_stepping += 1;
@@ -188,7 +195,9 @@ impl CanvasSession {
         let mut guard = self.shared.lock();
         let st = &mut *guard;
         st.plugin_stepping = st.plugin_stepping.saturating_sub(1);
-        if let Some(canvas) = st.canvas.as_mut() {
+        if st.plugin_stepping == 0
+            && let Some(canvas) = st.canvas.as_mut()
+        {
             canvas.collapse_steps();
         }
         self.shared.frame(st);
@@ -247,7 +256,7 @@ pub(crate) fn link(linker: &mut Linker<Host>, granted: &[PluginPermission]) -> R
     }
     if write {
         linker.func_wrap(FROM, "add_layer", |caller: Caller<'_, Host>| -> i64 {
-            session(&caller).map_or(0, |s| s.add_layer() as i64)
+            session(&caller).map_or(0, |s| s.add_layer_quietly() as i64)
         })?;
         linker.func_wrap(
             FROM,
@@ -309,6 +318,11 @@ pub(crate) fn link(linker: &mut Linker<Host>, granted: &[PluginPermission]) -> R
             let Some(len) = usize::try_from(len).ok().filter(|&n| n <= MOST_PANEL) else { return 0 };
             let read = read_bytes(&caller, at, len).and_then(|b| String::from_utf8(b).ok());
             let Some(panel) = read.as_deref().and_then(read_panel) else { return 0 };
+            // one that asks for a key press has somewhere for it to go
+            let takes = |name: &str| caller.get_export(name).and_then(Extern::into_func).is_some();
+            if panel.key_press && !(takes(crate::plugin_run::PANEL_KEY) && takes(crate::plugin_run::KEY_BUFFER)) {
+                return 0;
+            }
             let host = caller.data_mut();
             host.panel = Some(panel);
             host.close_panel = false;

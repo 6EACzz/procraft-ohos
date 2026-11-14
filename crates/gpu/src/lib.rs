@@ -5,6 +5,7 @@
 //! nothing relies on reading the render target in the shader (Android GPUs have no portable way).
 
 mod canvas;
+mod kept;
 mod lighting;
 mod scene;
 mod sphere;
@@ -20,6 +21,7 @@ pub use canvas::{
     SmallScene, Stripes, StrokeStyle, StrokeTool, SurroundGrid, Target, Thumbnail, most_resident, read_texture,
     start_reading, textures_bytes,
 };
+pub use kept::keep_pipelines_in;
 pub use lighting::Lighting;
 pub use scene::{
     GrainLook, Light, MOST_LIGHTS, MaterialLook, MeshView, Orbit, ShownSelection, SurfaceMap, material_source,
@@ -61,6 +63,15 @@ fn backends_name(backends: wgpu::Backends) -> String {
     if names.is_empty() { format!("{backends:?}") } else { names.join(" or ") }
 }
 
+/// The layers an array texture of `n` is made with on OpenGL (ES): at least two (one makes a plain
+/// 2D texture), and never six or a multiple of it, which wgpu's OpenGL takes for a cube map (a
+/// square texture's): read as an array, that gave nothing (every brush shape and grain blank once
+/// there were 58 shapes and 8 spare layers).
+fn gl_array_layers(n: u32) -> u32 {
+    let n = n.max(2);
+    if n.is_multiple_of(6) { n + 1 } else { n }
+}
+
 /// Whether a GPU named `name` on `backend` needs its canvas textures uncompressed.
 fn keeps_textures_uncompressed(name: &str, backend: wgpu::Backend) -> bool {
     backend == wgpu::Backend::Vulkan && name.to_ascii_lowercase().contains("mali")
@@ -98,6 +109,9 @@ pub struct Gpu {
     lost: Arc<AtomicBool>,
     /// The canvases' pipelines, once the first canvas has made them.
     canvas_pipelines: Arc<OnceLock<Arc<canvas::Pipelines>>>,
+    /// The pipeline cache kept between runs (see [`kept`]), once the canvases' pipelines are made
+    /// with it.
+    kept: Arc<OnceLock<Option<kept::Kept>>>,
     /// Buffers pixels came back from the GPU through, kept for the next readback (see
     /// [`Gpu::readback_buffer`]).
     readbacks: Arc<std::sync::Mutex<Vec<wgpu::Buffer>>>,
@@ -318,8 +332,10 @@ impl Gpu {
         }
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("procraft"),
-            // where the GPU has it, for strokes that build up only to their transfer
-            required_features: adapter.features() & wgpu::Features::DUAL_SOURCE_BLENDING,
+            // where the GPU has them: dual-source blending for strokes that build up only to their
+            // transfer, and the pipelines' compiled form to keep between runs
+            required_features: adapter.features()
+                & (wgpu::Features::DUAL_SOURCE_BLENDING | wgpu::Features::PIPELINE_CACHE),
             // the adapter's own limits, so large canvases fit where the GPU allows them
             required_limits: adapter.limits(),
             // memory taken in small blocks (a few MB up to 64): a block of each kind, once made,
@@ -358,6 +374,7 @@ impl Gpu {
             errors,
             lost,
             canvas_pipelines: Arc::default(),
+            kept: Arc::default(),
             readbacks: Arc::default(),
         })
     }
@@ -423,6 +440,7 @@ impl Gpu {
     pub fn prepare_canvases(&self) {
         let started = std::time::Instant::now();
         let _ = self.canvas_pipelines();
+        self.keep_pipelines();
         let pipelines = started.elapsed().as_millis();
         procraft_engine::textures::prepare();
         log::info!(
@@ -431,12 +449,29 @@ impl Gpu {
         );
     }
 
-    /// The pipelines canvases draw with, made by the first canvas on this device.
+    /// The pipelines canvases draw with, made by the first canvas on this device: from their
+    /// compiled form kept by an earlier run, where there is one (see [`keep_pipelines_in`]).
     pub(crate) fn canvas_pipelines(&self) -> Arc<canvas::Pipelines> {
-        Arc::clone(
-            self.canvas_pipelines
-                .get_or_init(|| Arc::new(canvas::Pipelines::new(&self.device, canvas::liquify_format(&self.adapter)))),
-        )
+        Arc::clone(self.canvas_pipelines.get_or_init(|| {
+            let kept = self
+                .kept
+                .get_or_init(|| kept::folder().and_then(|dir| kept::Kept::open(&self.device, &self.adapter, &dir)));
+            let format = canvas::liquify_format(&self.adapter);
+            let pipelines = canvas::Pipelines::new(&self.device, format, kept.as_ref().map(|k| k.cache.clone()));
+            if let Some(kept) = kept {
+                kept.made();
+            }
+            Arc::new(pipelines)
+        }))
+    }
+
+    /// Keeps the pipelines made so far for the next run, where they are kept (see
+    /// [`keep_pipelines_in`]): those a window's first frame made as well. Writes a file: off the
+    /// main thread.
+    pub fn keep_pipelines(&self) {
+        if let Some(Some(kept)) = self.kept.get() {
+            kept.save();
+        }
     }
 
     /// GPU validation errors so far (each one is logged); tests expect none.
@@ -460,6 +495,12 @@ impl Gpu {
         if self.is_gl() { 2 } else { 1 }
     }
 
+    /// The layers a texture viewed as an array of `n` is made with: on OpenGL (ES) never a
+    /// multiple of six (see [`gl_array_layers`]); else `n`.
+    pub fn array_layers(&self, n: u32) -> u32 {
+        if self.is_gl() { gl_array_layers(n) } else { n.max(1) }
+    }
+
     /// Whether the device is OpenGL (ES)'s.
     pub fn is_gl(&self) -> bool {
         self.adapter.get_info().backend == wgpu::Backend::Gl
@@ -476,6 +517,12 @@ mod tests {
         if std::env::var_os("WGPU_BACKEND").is_none() {
             assert_eq!(super::Gpu::backends().last(), Some(&wgpu::Backends::GL));
         }
+    }
+
+    #[test]
+    fn array_textures_on_opengl_are_never_taken_for_cube_maps() {
+        use super::gl_array_layers;
+        assert_eq!([1, 2, 5, 6, 7, 12, 63, 66, 67].map(gl_array_layers), [2, 2, 5, 7, 7, 13, 63, 67, 67]);
     }
 
     #[test]

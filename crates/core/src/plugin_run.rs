@@ -73,8 +73,40 @@
 //!   RGBA8); `procraft_between_row(frame: i32, y: i32)` says row `y` of `frame` (0 this frame, 1 the
 //!   next) is there; `procraft_between_run() -> i32` draws the frame between (0: none);
 //!   `procraft_between_out(y: i32)` puts its row `y` there. A long call, on fuel by the area.
+//! - For the hook `key_shortcut` (a hardware keyboard's presses taken as others, the plugin's): a
+//!   press is written as text, its modifiers then its key ("command+shift+z", "space", see
+//!   [`crate::KeyCombo`]), into `procraft_key_buffer(len: i32) -> i32`; then
+//!   `procraft_key_shortcut(len: i32) -> i64` says what the press is taken as, and
+//!   `procraft_key_shortcut_keys(len: i32) -> i64` which presses now do what this one does by
+//!   default, for the shortcuts' list. Each answers 0 for as it is, below 0 for none, else where its
+//!   text is in its `memory` (low half) and how long (high half): one press, or presses with a
+//!   space between. `procraft_key_shortcuts(len: i32)`, if it has one, is told the app's shortcuts
+//!   as it starts (lines of the group, what it does, its presses and 1 if the app keeps its keys,
+//!   tab between: [`crate::keys::shortcuts_told`]).
+//! - `procraft_panel_key(len: i32) -> i32`: while its panel asks for a key press, the next one,
+//!   written as above into `procraft_key_buffer`; it acts as a touch on the panel does.
+//! - What a plugin keeps (interface 2, at most [`MOST_KEPT`] bytes, with its other files): after an
+//!   action, a touch on its panel or a key press its panel asked for, `procraft_keep() -> i64`, if it
+//!   has one, says what to keep from now on, packed as a key answer's text (below 0: nothing new).
+//!   Each copy of its code is told what it keeps as it starts, and whenever another copy keeps
+//!   something new: into `procraft_kept_buffer(len: i32) -> i32`, then `procraft_kept(len: i32)`.
 //! - `procraft_control(index: i32, value: f32)`: a control's value (a switch is 0 or 1), by its
 //!   place in the manifest: each as the plugin starts, then each as it changes. Needed if it has any.
+//! - For kinds of layer of its own (interface 3, its manifest's `layer_kinds`; see
+//!   `plugin_layers.rs`): `procraft_layer_in(len: i32) -> i32` says where `len` bytes go and
+//!   `procraft_layer_out() -> i32` where an answer is; `procraft_layer_load(kind: i32, len: i32) ->
+//!   i32` takes `len` bytes there as the data of a layer of its kind `kind` (by its place in
+//!   `layer_kinds`; none for a new, empty one), 0 if it could; `procraft_layer_add(len: i32) -> i32`
+//!   takes an item recorded on that layer (0: kept as drawn, 1: kept, and the layer is drawn again
+//!   from its items); `procraft_layer_save() -> i32` gives the layer's data now and
+//!   `procraft_layer_draw() -> i32` its items to draw, each its length at `procraft_layer_out()`.
+//!   If it has them, `procraft_layer_select(len: i32) -> i32` gives the ids of the items a selection
+//!   (`len` bytes) takes, and `procraft_layer_edit(len: i32) -> i32` makes the changes `len` bytes
+//!   ask of its items (not 0: something changed); `procraft_layer_fill(len: i32) -> i32` takes a
+//!   colour dropped on the layer (not 0: its items changed); `procraft_layer_export(len: i32) -> i32`
+//!   makes a file of an artwork's layers of a kind (its length at `procraft_layer_out()`, below 0
+//!   none); `procraft_layer_hit(len: i32) -> i32` says which item is at a point (4 bytes, its id, at
+//!   `procraft_layer_out()`, or 0 for none).
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
@@ -177,6 +209,9 @@ const RADIAL_PARTS: std::ops::RangeInclusive<i32> = 2..=64;
 const MEMORY: &str = "memory";
 const CONTROL: &str = "procraft_control";
 const ACTION: &str = "procraft_action";
+/// What a plugin on the `stroke_kept` or `layer_added` hook is told through (1 a stroke kept, 2 a
+/// layer added).
+const EVENT: &str = "procraft_event";
 const PANEL_EVENT: &str = "procraft_panel_event";
 const CANVAS_NEW: &str = "procraft_canvas_new";
 const CANVAS_TOUCH: &str = "procraft_canvas_touch";
@@ -186,6 +221,17 @@ const CANVAS_SAVE: &str = "procraft_canvas_save";
 const CANVAS_IN: &str = "procraft_canvas_in";
 const CANVAS_LOAD: &str = "procraft_canvas_load";
 const CANVAS_TOOL: &str = "procraft_canvas_tool";
+const LAYER_IN: &str = "procraft_layer_in";
+const LAYER_OUT: &str = "procraft_layer_out";
+const LAYER_LOAD: &str = "procraft_layer_load";
+const LAYER_ADD: &str = "procraft_layer_add";
+const LAYER_SAVE: &str = "procraft_layer_save";
+const LAYER_DRAW: &str = "procraft_layer_draw";
+const LAYER_SELECT: &str = "procraft_layer_select";
+const LAYER_EDIT: &str = "procraft_layer_edit";
+const LAYER_FILL: &str = "procraft_layer_fill";
+const LAYER_EXPORT: &str = "procraft_layer_export";
+const LAYER_HIT: &str = "procraft_layer_hit";
 /// What a call on a plugin's own artwork may spend (its drawing, its saving), and how long; a touch,
 /// which comes with each sample while the canvas waits, far less.
 const CANVAS_FUEL: u64 = 800_000_000;
@@ -193,8 +239,27 @@ const MOST_CANVAS_TIME: Duration = Duration::from_secs(5);
 const TOUCH_FUEL: u64 = 20_000_000;
 const MOST_TOUCH_TIME: Duration = Duration::from_millis(250);
 /// What an action may spend and how long it may take: it does the plugin's work on the artwork.
+/// What a call on a plugin's layer may take: as a call on its own artwork, the steps and the time;
+/// and the memory a plugin with kinds of layer may ask for (a layer's data in, out and worked on).
+const LAYER_FUEL: u64 = CANVAS_FUEL;
+const MOST_LAYER_TIME: Duration = MOST_CANVAS_TIME;
+const MOST_LAYER_MEMORY: usize = 256 << 20;
 const ACTION_FUEL: u64 = 4_000_000_000;
 const MOST_ACTION_TIME: Duration = Duration::from_secs(20);
+pub(crate) const KEY_BUFFER: &str = "procraft_key_buffer";
+const KEY_SHORTCUT: &str = "procraft_key_shortcut";
+const KEY_SHORTCUT_KEYS: &str = "procraft_key_shortcut_keys";
+const KEY_SHORTCUTS: &str = "procraft_key_shortcuts";
+pub(crate) const PANEL_KEY: &str = "procraft_panel_key";
+const KEPT_BUFFER: &str = "procraft_kept_buffer";
+const KEPT: &str = "procraft_kept";
+const KEEP: &str = "procraft_keep";
+/// The most bytes a plugin keeps, and of the presses a key answer writes.
+pub(crate) const MOST_KEPT: usize = 64 << 10;
+const MOST_KEY_TEXT: usize = 4 << 10;
+/// What being told what it keeps, or the app's shortcuts, may spend, and how long it may take.
+const TOLD_FUEL: u64 = 20_000_000;
+const MOST_TOLD_TIME: Duration = Duration::from_secs(2);
 
 /// What a plugin may step into, by the name a manifest gives it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,6 +281,15 @@ pub(crate) enum Hook {
     StrokeSound,
     Inbetween,
     Picker,
+    /// Told each time a stroke is kept, acting on the artwork as an action does.
+    StrokeKept,
+    /// Told each time a layer is added from the Layers panel, acting as an action does.
+    LayerAdded,
+    /// A hardware keyboard's presses taken as others before the app's shortcuts see them.
+    KeyShortcut,
+    /// Kinds of layer of its own (interface 3): not named in `hooks`, but on it whenever its
+    /// manifest lists `layer_kinds`.
+    Layers,
 }
 
 impl Hook {
@@ -238,6 +312,9 @@ impl Hook {
             "stroke_sound" => Some(Hook::StrokeSound),
             "inbetween" => Some(Hook::Inbetween),
             "picker" => Some(Hook::Picker),
+            "stroke_kept" => Some(Hook::StrokeKept),
+            "layer_added" => Some(Hook::LayerAdded),
+            "key_shortcut" => Some(Hook::KeyShortcut),
             _ => None,
         }
     }
@@ -262,6 +339,10 @@ impl Hook {
             Hook::StrokeSound => "This plugin can play a sound as you draw.",
             Hook::Inbetween => "This plugin can draw frames between your animation's frames.",
             Hook::Picker => "This plugin can draw the colour panel's Classic picker its own way.",
+            Hook::StrokeKept => "This plugin can act on your artwork each time you finish a stroke.",
+            Hook::LayerAdded => "This plugin can act on your artwork each time you add a layer.",
+            Hook::KeyShortcut => "This plugin can change what your keyboard's keys do.",
+            Hook::Layers => "This plugin can add kinds of layer whose strokes it keeps, and draw them again.",
         }
     }
 
@@ -283,6 +364,22 @@ impl Hook {
             Hook::OpacityTogether => exports(module, OPACITY_TOGETHER, &[], &[ValType::I32]),
             Hook::RandomiseBrush => exports(module, RANDOMISE, &[ValType::I32, ValType::I32], &[ValType::F32]),
             Hook::ColourTriangle => exports(module, COLOUR_TRIANGLE, &[], &[ValType::I32]),
+            Hook::StrokeKept | Hook::LayerAdded => exports(module, EVENT, &[ValType::I32], &[ValType::I32]),
+            Hook::Layers => {
+                exports(module, LAYER_IN, &[ValType::I32], &[ValType::I32])
+                    && exports(module, LAYER_OUT, &[], &[ValType::I32])
+                    && exports(module, LAYER_LOAD, &[ValType::I32, ValType::I32], &[ValType::I32])
+                    && exports(module, LAYER_ADD, &[ValType::I32], &[ValType::I32])
+                    && exports(module, LAYER_SAVE, &[], &[ValType::I32])
+                    && exports(module, LAYER_DRAW, &[], &[ValType::I32])
+                    && has_memory(module)
+            }
+            Hook::KeyShortcut => {
+                exports(module, KEY_BUFFER, &[ValType::I32], &[ValType::I32])
+                    && exports(module, KEY_SHORTCUT, &[ValType::I32], &[ValType::I64])
+                    && exports(module, KEY_SHORTCUT_KEYS, &[ValType::I32], &[ValType::I64])
+                    && has_memory(module)
+            }
             Hook::Picker => {
                 exports(module, PICKER_PICK, &[ValType::F32, ValType::F32], &[ValType::I64])
                     && exports(module, PICKER_POINT, &[ValType::F32, ValType::F32], &[ValType::I64])
@@ -490,6 +587,35 @@ struct CanvasCalls {
     tool: Option<TypedFunc<(i32, i32, f32, f32), ()>>,
 }
 
+/// What a plugin's own kinds of layer are reached through (`plugin_layers.rs`).
+struct LayerCalls {
+    input: TypedFunc<i32, i32>,
+    out: TypedFunc<(), i32>,
+    load: TypedFunc<(i32, i32), i32>,
+    add: TypedFunc<i32, i32>,
+    save: TypedFunc<(), i32>,
+    draw: TypedFunc<(), i32>,
+    /// Which items a selection takes, and changes to items, if it has them.
+    select: Option<TypedFunc<i32, i32>>,
+    edit: Option<TypedFunc<i32, i32>>,
+    /// A colour dropped on the layer, if it takes one.
+    fill: Option<TypedFunc<i32, i32>>,
+    /// A file of an artwork's layers, if it makes any.
+    export: Option<TypedFunc<i32, i32>>,
+    /// The item at a point, if it says.
+    hit: Option<TypedFunc<i32, i32>>,
+}
+
+/// What a plugin says of an item recorded on its layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LayerAdded {
+    /// Kept: the layer's pixels, the stroke painted as it was drawn, are as its items draw it.
+    Kept,
+    /// Kept, and what was drawn before changed (strokes taken away, say): the layer is drawn again
+    /// from its items.
+    DrawAgain,
+}
+
 /// Whether `module` exports what a plugin's own artwork is reached through.
 fn has_canvas(module: &Module) -> bool {
     use ValType::{F32, I32};
@@ -581,7 +707,44 @@ pub(crate) struct Running {
     control: Option<TypedFunc<(i32, f32), ()>>,
     action: Option<TypedFunc<i32, i32>>,
     panel_event: Option<TypedFunc<(i32, f32), i32>>,
+    event: Option<TypedFunc<i32, i32>>,
     canvas: Option<CanvasCalls>,
+    layers: Option<LayerCalls>,
+    key_buffer: Option<TypedFunc<i32, i32>>,
+    key_shortcut: Option<TypedFunc<i32, i64>>,
+    key_shortcut_keys: Option<TypedFunc<i32, i64>>,
+    key_shortcuts: Option<TypedFunc<i32, ()>>,
+    panel_key: Option<TypedFunc<i32, i32>>,
+    kept_buffer: Option<TypedFunc<i32, i32>>,
+    kept: Option<TypedFunc<i32, ()>>,
+    keep: Option<TypedFunc<(), i64>>,
+}
+
+/// Where a key answer's text is and how long, or what it says without one: as it is (none), or
+/// no press (an empty list).
+fn key_answer(store: &Store<Host>, memory: &Memory, packed: i64) -> Result<Option<Vec<u8>>, Stop> {
+    if packed == 0 {
+        return Ok(None);
+    }
+    if packed < 0 {
+        return Ok(Some(Vec::new()));
+    }
+    let (at, len) = (packed as u64 as u32 as usize, (packed as u64 >> 32) as usize);
+    if len > MOST_KEPT {
+        return Err(Stop::Nonsense);
+    }
+    let mut bytes = vec![0_u8; len];
+    memory.read(store, at, &mut bytes).map_err(|_| Stop::Nonsense)?;
+    Ok(Some(bytes))
+}
+
+/// The presses a key answer's text writes; one that writes none that hold up stops the plugin.
+fn presses(text: &[u8]) -> Result<Vec<crate::KeyCombo>, Stop> {
+    let text = std::str::from_utf8(text).map_err(|_| Stop::Nonsense)?;
+    if text.len() > MOST_KEY_TEXT {
+        return Err(Stop::Nonsense);
+    }
+    crate::KeyCombo::read_all(text).ok_or(Stop::Nonsense)
 }
 
 impl Running {
@@ -592,7 +755,9 @@ impl Running {
         hooks: &[Hook],
         permissions: &[PluginPermission],
     ) -> Result<Running, Stop> {
-        let most_memory = if hooks.contains(&Hook::Inbetween) {
+        let most_memory = if hooks.contains(&Hook::Layers) {
+            MOST_LAYER_MEMORY
+        } else if hooks.contains(&Hook::Inbetween) {
             MOST_BETWEEN_MEMORY
         } else if hooks.contains(&Hook::StrokeSound) {
             MOST_SOUND_MEMORY
@@ -691,6 +856,7 @@ impl Running {
             let control = instance.get_typed_func(&store, CONTROL).ok();
             let action = instance.get_typed_func(&store, ACTION).ok();
             let panel_event = instance.get_typed_func(&store, PANEL_EVENT).ok();
+            let event = instance.get_typed_func(&store, EVENT).ok();
             let canvas = (|| {
                 Some(CanvasCalls {
                     new: instance.get_typed_func(&store, CANVAS_NEW).ok()?,
@@ -703,6 +869,29 @@ impl Running {
                     tool: instance.get_typed_func(&store, CANVAS_TOOL).ok(),
                 })
             })();
+            let layers = (|| {
+                Some(LayerCalls {
+                    input: instance.get_typed_func(&store, LAYER_IN).ok()?,
+                    out: instance.get_typed_func(&store, LAYER_OUT).ok()?,
+                    load: instance.get_typed_func(&store, LAYER_LOAD).ok()?,
+                    add: instance.get_typed_func(&store, LAYER_ADD).ok()?,
+                    save: instance.get_typed_func(&store, LAYER_SAVE).ok()?,
+                    draw: instance.get_typed_func(&store, LAYER_DRAW).ok()?,
+                    select: instance.get_typed_func(&store, LAYER_SELECT).ok(),
+                    edit: instance.get_typed_func(&store, LAYER_EDIT).ok(),
+                    fill: instance.get_typed_func(&store, LAYER_FILL).ok(),
+                    export: instance.get_typed_func(&store, LAYER_EXPORT).ok(),
+                    hit: instance.get_typed_func(&store, LAYER_HIT).ok(),
+                })
+            })();
+            let key_buffer = instance.get_typed_func(&store, KEY_BUFFER).ok();
+            let key_shortcut = instance.get_typed_func(&store, KEY_SHORTCUT).ok();
+            let key_shortcut_keys = instance.get_typed_func(&store, KEY_SHORTCUT_KEYS).ok();
+            let key_shortcuts = instance.get_typed_func(&store, KEY_SHORTCUTS).ok();
+            let panel_key = instance.get_typed_func(&store, PANEL_KEY).ok();
+            let kept_buffer = instance.get_typed_func(&store, KEPT_BUFFER).ok();
+            let kept = instance.get_typed_func(&store, KEPT).ok();
+            let keep = instance.get_typed_func(&store, KEEP).ok();
             Ok(Running {
                 store,
                 position,
@@ -737,13 +926,153 @@ impl Running {
                 control,
                 action,
                 panel_event,
+                event,
                 canvas,
+                layers,
+                key_buffer,
+                key_shortcut,
+                key_shortcut_keys,
+                key_shortcuts,
+                panel_key,
+                kept_buffer,
+                kept,
+                keep,
             })
         })?;
         for (index, value) in controls.iter().enumerate() {
             running.control(index, *value)?;
         }
         Ok(running)
+    }
+
+    /// `bytes` started as [`Running::start_on`] does, told `controls`, what it `kept` (if it keeps
+    /// anything), and on the key hook the app's shortcuts.
+    pub(crate) fn start_told(
+        bytes: &[u8],
+        controls: &[f32],
+        hooks: &[Hook],
+        permissions: &[PluginPermission],
+        kept: Option<&[u8]>,
+    ) -> Result<Running, Stop> {
+        let mut running = Running::start_on(bytes, controls, hooks, permissions)?;
+        if let Some(kept) = kept {
+            running.give_kept(kept)?;
+        }
+        if hooks.contains(&Hook::KeyShortcut) {
+            running.tell_shortcuts(&crate::keys::shortcuts_told(crate::keys::DESKTOP))?;
+        }
+        Ok(running)
+    }
+
+    /// `text` written where its key buffer says, for a call that follows: its length.
+    fn hand_key_text(&mut self, text: &str) -> Result<i32, Stop> {
+        let Running { store, key_buffer, memory, .. } = self;
+        let (Some(buffer), Some(memory)) = (key_buffer.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let len = i32::try_from(text.len()).map_err(|_| Stop::Nonsense)?;
+        guarded(|| {
+            store.set_fuel(SAMPLE_FUEL).map_err(|_| Stop::Damaged)?;
+            let at = buffer.call(&mut *store, len).map_err(|e| stop_of(&e))?;
+            let place = usize::try_from(at).map_err(|_| Stop::Nonsense)?;
+            memory.write(&mut *store, place, text.as_bytes()).map_err(|_| Stop::Nonsense)?;
+            Ok(len)
+        })
+    }
+
+    /// What the key hook answers for `press` (`keys`: which presses now do what it does by default,
+    /// else what it is taken as): none for as it is, else the presses.
+    fn key_call(&mut self, keys: bool, press: &crate::KeyCombo) -> Result<Option<Vec<crate::KeyCombo>>, Stop> {
+        let func = if keys { self.key_shortcut_keys } else { self.key_shortcut };
+        let (Some(func), Some(memory)) = (func, self.memory) else { return Ok(None) };
+        let len = self.hand_key_text(&press.text())?;
+        let store = &mut self.store;
+        let packed = guarded(|| {
+            store.set_fuel(SAMPLE_FUEL).map_err(|_| Stop::Damaged)?;
+            func.call(&mut *store, len).map_err(|e| stop_of(&e))
+        })?;
+        key_answer(store, &memory, packed)?.map(|text| presses(&text)).transpose()
+    }
+
+    /// What it says `press` is taken as: as it is (none), another press, or no press at all (an
+    /// empty list). More than one press makes no sense.
+    pub(crate) fn key_shortcut(&mut self, press: &crate::KeyCombo) -> Result<Option<Vec<crate::KeyCombo>>, Stop> {
+        let taken = self.key_call(false, press)?;
+        if taken.as_ref().is_some_and(|presses| presses.len() > 1) {
+            return Err(Stop::Nonsense);
+        }
+        Ok(taken)
+    }
+
+    /// The presses it says now do what `press` does by default: as it is (none), or these (perhaps
+    /// none).
+    pub(crate) fn key_shortcut_keys(&mut self, press: &crate::KeyCombo) -> Result<Option<Vec<crate::KeyCombo>>, Stop> {
+        self.key_call(true, press)
+    }
+
+    /// Tells it the app's shortcuts (`told`, as [`crate::keys::shortcuts_told`] writes them), if it
+    /// listens.
+    fn tell_shortcuts(&mut self, told: &str) -> Result<(), Stop> {
+        if self.key_shortcuts.is_none() || self.key_buffer.is_none() || self.memory.is_none() {
+            return Ok(());
+        }
+        let len = self.hand_key_text(told)?;
+        let Running { store, key_shortcuts, .. } = self;
+        let Some(call) = key_shortcuts.as_ref() else { return Ok(()) };
+        let (mut left, until) = (TOLD_FUEL, Instant::now() + MOST_TOLD_TIME);
+        guarded(|| long_call(store, call, len, &mut left, until))
+    }
+
+    /// Whether its panel can be handed a key press: it exports what one goes through.
+    pub(crate) fn takes_keys(&self) -> bool {
+        self.panel_key.is_some() && self.key_buffer.is_some() && self.memory.is_some()
+    }
+
+    /// Tells it the key `press` its panel asked for, on the artwork `session`, as a long call (as a
+    /// touch on its panel is).
+    pub(crate) fn panel_key(
+        &mut self,
+        press: &crate::KeyCombo,
+        session: std::sync::Arc<crate::CanvasSession>,
+    ) -> Result<(), Stop> {
+        if !self.takes_keys() {
+            return Ok(());
+        }
+        let len = self.hand_key_text(&press.text())?;
+        let Running { store, panel_key, .. } = self;
+        let Some(panel_key) = panel_key.as_ref() else { return Ok(()) };
+        store.data_mut().session = Some(session as std::sync::Arc<dyn std::any::Any + Send + Sync>);
+        let (mut left, until) = (ACTION_FUEL, Instant::now() + MOST_ACTION_TIME);
+        let ran = guarded(|| long_call(store, panel_key, len, &mut left, until).map(|_| ()));
+        store.data_mut().session = None;
+        ran
+    }
+
+    /// Hands it what it keeps, if it listens.
+    pub(crate) fn give_kept(&mut self, data: &[u8]) -> Result<(), Stop> {
+        let Running { store, kept_buffer, kept, memory, .. } = self;
+        let (Some(buffer), Some(kept), Some(memory)) = (kept_buffer.as_ref(), kept.as_ref(), memory.as_ref()) else {
+            return Ok(());
+        };
+        let len = i32::try_from(data.len()).map_err(|_| Stop::Nonsense)?;
+        let (mut left, until) = (TOLD_FUEL, Instant::now() + MOST_TOLD_TIME);
+        guarded(|| {
+            let at = long_call(store, buffer, len, &mut left, until)?;
+            let place = usize::try_from(at).map_err(|_| Stop::Nonsense)?;
+            memory.write(&mut *store, place, data).map_err(|_| Stop::Nonsense)?;
+            long_call(store, kept, len, &mut left, until)
+        })
+    }
+
+    /// What it says to keep from now on, if it has anything new to keep.
+    pub(crate) fn take_keep(&mut self) -> Result<Option<Vec<u8>>, Stop> {
+        let Running { store, keep, memory, .. } = self;
+        let (Some(keep), Some(memory)) = (keep.as_ref(), memory.as_ref()) else { return Ok(None) };
+        let (mut left, until) = (TOLD_FUEL, Instant::now() + MOST_TOLD_TIME);
+        let packed = guarded(|| long_call(store, keep, (), &mut left, until))?;
+        // (nothing new reads as "no press": an empty list)
+        if packed < 0 {
+            return Ok(None);
+        }
+        Ok(Some(key_answer(store, memory, packed)?.unwrap_or_default()))
     }
 
     /// Runs its action `index` on the artwork `session` (what its permissions give it to reach), as a
@@ -756,6 +1085,22 @@ impl Running {
         let (mut left, until) = (ACTION_FUEL, Instant::now() + MOST_ACTION_TIME);
         let ran = guarded(|| long_call(store, action, index, &mut left, until).map(|_| ()));
         store.data_mut().session = None;
+        ran
+    }
+
+    /// Tells it event `kind` happened (1 a stroke kept, 2 a layer added), on the artwork `session`,
+    /// to act on as an action does, on a touch's budget: the canvas waits for it.
+    pub(crate) fn event(&mut self, kind: i32, session: std::sync::Arc<crate::CanvasSession>) -> Result<(), Stop> {
+        let Running { store, event, .. } = self;
+        let Some(event) = event.as_ref() else { return Ok(()) };
+        store.data_mut().session = Some(session as std::sync::Arc<dyn std::any::Any + Send + Sync>);
+        let (mut left, until) = (TOUCH_FUEL, Instant::now() + MOST_TOUCH_TIME);
+        let ran = guarded(|| long_call(store, event, kind, &mut left, until).map(|_| ()));
+        store.data_mut().session = None;
+        // an event shows no panel: one it began is dropped whole
+        let host = store.data_mut();
+        host.panel = None;
+        host.close_panel = false;
         ran
     }
 
@@ -847,6 +1192,172 @@ impl Running {
                 usize::try_from(long_call(store, &calls.input, len, &mut left, until)?).map_err(|_| Stop::Nonsense)?;
             memory.write(&mut *store, at, data).map_err(|_| Stop::Nonsense)?;
             Ok(long_call(store, &calls.load, (), &mut left, until)? == 0)
+        })
+    }
+
+    /// `bytes` written where its layer calls take what they are handed: their length.
+    fn layer_in(&mut self, bytes: &[u8], left: &mut u64, until: Instant) -> Result<i32, Stop> {
+        let Running { store, layers, memory, .. } = self;
+        let (Some(calls), Some(memory)) = (layers.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let len = i32::try_from(bytes.len()).map_err(|_| Stop::Nonsense)?;
+        guarded(|| {
+            let at = usize::try_from(long_call(store, &calls.input, len, left, until)?).map_err(|_| Stop::Nonsense)?;
+            memory.write(&mut *store, at, bytes).map_err(|_| Stop::Nonsense)?;
+            Ok(len)
+        })
+    }
+
+    /// What `call` (one of its layer calls, answering a length) leaves at `procraft_layer_out()`,
+    /// at most `most` bytes.
+    fn layer_out(&mut self, call: fn(&LayerCalls) -> &TypedFunc<(), i32>, most: usize) -> Result<Vec<u8>, Stop> {
+        let Running { store, layers, memory, .. } = self;
+        let (Some(calls), Some(memory)) = (layers.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        guarded(|| {
+            let len =
+                usize::try_from(long_call(store, call(calls), (), &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+            if len > most {
+                return Err(Stop::Nonsense);
+            }
+            let at =
+                usize::try_from(long_call(store, &calls.out, (), &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+            let mut bytes = vec![0_u8; len];
+            memory.read(&*store, at, &mut bytes).map_err(|_| Stop::Nonsense)?;
+            Ok(bytes)
+        })
+    }
+
+    /// `data` handed to it as a layer of its kind `kind` (none: a new, empty one) to work on:
+    /// whether it took it.
+    pub(crate) fn layer_load(&mut self, kind: usize, data: &[u8]) -> Result<bool, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(data, &mut left, until)?;
+        let kind = i32::try_from(kind).map_err(|_| Stop::Nonsense)?;
+        let Running { store, layers, .. } = self;
+        let Some(calls) = layers.as_ref() else { return Err(Stop::Damaged) };
+        Ok(guarded(|| long_call(store, &calls.load, (kind, len), &mut left, until))? == 0)
+    }
+
+    /// `item` recorded on the layer it works on: what it says of it. Any answer but its two makes
+    /// no sense.
+    pub(crate) fn layer_add(&mut self, item: &[u8]) -> Result<LayerAdded, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(item, &mut left, until)?;
+        let Running { store, layers, .. } = self;
+        let Some(calls) = layers.as_ref() else { return Err(Stop::Damaged) };
+        match guarded(|| long_call(store, &calls.add, len, &mut left, until))? {
+            0 => Ok(LayerAdded::Kept),
+            1 => Ok(LayerAdded::DrawAgain),
+            _ => Err(Stop::Nonsense),
+        }
+    }
+
+    /// The data of the layer it works on, as it is now (at most `most` bytes).
+    pub(crate) fn layer_save(&mut self, most: usize) -> Result<Vec<u8>, Stop> {
+        self.layer_out(|calls| &calls.save, most)
+    }
+
+    /// The items the layer it works on draws, in order (at most `most` bytes).
+    pub(crate) fn layer_draw(&mut self, most: usize) -> Result<Vec<u8>, Stop> {
+        self.layer_out(|calls| &calls.draw, most)
+    }
+
+    /// Whether it says which items a selection takes and changes them.
+    pub(crate) fn layer_edits(&self) -> bool {
+        self.layers.as_ref().is_some_and(|calls| calls.select.is_some() && calls.edit.is_some())
+    }
+
+    /// The ids of the items of the layer it works on that `area` (a selection) takes, at most
+    /// `most` of them.
+    pub(crate) fn layer_select(&mut self, area: &[u8], most: usize) -> Result<Vec<u32>, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(area, &mut left, until)?;
+        let Running { store, layers, memory, .. } = self;
+        let (Some(calls), Some(memory)) = (layers.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let Some(select) = calls.select.as_ref() else { return Ok(Vec::new()) };
+        guarded(|| {
+            let bytes =
+                usize::try_from(long_call(store, select, len, &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+            if bytes % 4 != 0 || bytes / 4 > most {
+                return Err(Stop::Nonsense);
+            }
+            let at =
+                usize::try_from(long_call(store, &calls.out, (), &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+            let mut out = vec![0_u8; bytes];
+            memory.read(&*store, at, &mut out).map_err(|_| Stop::Nonsense)?;
+            Ok(out.as_chunks::<4>().0.iter().map(|b| u32::from_le_bytes(*b)).collect())
+        })
+    }
+
+    /// The changes `changes` asks of the items of the layer it works on, made: whether anything
+    /// changed.
+    pub(crate) fn layer_edit(&mut self, changes: &[u8]) -> Result<bool, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(changes, &mut left, until)?;
+        let Running { store, layers, .. } = self;
+        let Some(edit) = layers.as_ref().and_then(|calls| calls.edit.as_ref()) else { return Ok(false) };
+        Ok(guarded(|| long_call(store, edit, len, &mut left, until))? != 0)
+    }
+
+    /// Whether it takes a colour dropped on its layer.
+    pub(crate) fn layer_fills(&self) -> bool {
+        self.layers.as_ref().is_some_and(|calls| calls.fill.is_some())
+    }
+
+    /// A colour dropped on the layer it works on (`drop`, a record): whether its items changed.
+    pub(crate) fn layer_fill(&mut self, drop: &[u8]) -> Result<bool, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(drop, &mut left, until)?;
+        let Running { store, layers, .. } = self;
+        let Some(fill) = layers.as_ref().and_then(|calls| calls.fill.as_ref()) else { return Ok(false) };
+        Ok(guarded(|| long_call(store, fill, len, &mut left, until))? != 0)
+    }
+
+    /// The id of the item of the layer it works on at the point `request` (a record) says: none if
+    /// there is none there, or it doesn't say (`Ok(None)` either way).
+    pub(crate) fn layer_hit(&mut self, request: &[u8]) -> Result<Option<u32>, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(request, &mut left, until)?;
+        let Running { store, layers, memory, .. } = self;
+        let (Some(calls), Some(memory)) = (layers.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let Some(hit) = calls.hit.as_ref() else { return Ok(None) };
+        guarded(|| match long_call(store, hit, len, &mut left, until)? {
+            0 => Ok(None),
+            4 => {
+                let at =
+                    usize::try_from(long_call(store, &calls.out, (), &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+                let mut id = [0_u8; 4];
+                memory.read(&*store, at, &mut id).map_err(|_| Stop::Nonsense)?;
+                Ok(Some(u32::from_le_bytes(id)))
+            }
+            _ => Err(Stop::Nonsense),
+        })
+    }
+
+    /// Whether it says which item is at a point.
+    pub(crate) fn layer_hits(&self) -> bool {
+        self.layers.as_ref().is_some_and(|calls| calls.hit.is_some())
+    }
+
+    /// The file it makes of the layers `request` hands it (a record), at most `most` bytes: none if
+    /// it makes none.
+    pub(crate) fn layer_export(&mut self, request: &[u8], most: usize) -> Result<Option<Vec<u8>>, Stop> {
+        let (mut left, until) = (LAYER_FUEL, Instant::now() + MOST_LAYER_TIME);
+        let len = self.layer_in(request, &mut left, until)?;
+        let Running { store, layers, memory, .. } = self;
+        let (Some(calls), Some(memory)) = (layers.as_ref(), memory.as_ref()) else { return Err(Stop::Damaged) };
+        let Some(export) = calls.export.as_ref() else { return Ok(None) };
+        guarded(|| {
+            let made = long_call(store, export, len, &mut left, until)?;
+            let Ok(bytes) = usize::try_from(made) else { return Ok(None) };
+            if bytes > most {
+                return Err(Stop::Nonsense);
+            }
+            let at =
+                usize::try_from(long_call(store, &calls.out, (), &mut left, until)?).map_err(|_| Stop::Nonsense)?;
+            let mut out = vec![0_u8; bytes];
+            memory.read(&*store, at, &mut out).map_err(|_| Stop::Nonsense)?;
+            Ok(Some(out))
         })
     }
 
@@ -1340,6 +1851,107 @@ pub(crate) mod tests {
         (func (export "procraft_canvas_in") (param i32) (result i32) (i32.const 2048))
         (func (export "procraft_canvas_load") (result i32)
             (i64.store (i32.const 0) (i64.load (i32.const 2048))) (i32.const 0)))"#;
+
+    /// A plugin's artwork of marks: each touch of a stroke leaves a 10-pixel square in the colour the
+    /// stroke started with (its tool told it), a stroke called off takes its marks back, the eraser
+    /// takes away every mark within 8 pixels of it, and it keeps and draws all of them (each list
+    /// beginning as the last did, while marks are only added). Its data: the count, then each
+    /// mark's x, y and colour.
+    pub(crate) const MARKS: &str = r#"(module
+        (memory (export "memory") 1)
+        (func $copy (param $to i32) (param $from i32) (param $len i32)
+            (local $i i32)
+            (block $done (loop $each
+                (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+                (i32.store (i32.add (local.get $to) (local.get $i)) (i32.load (i32.add (local.get $from) (local.get $i))))
+                (local.set $i (i32.add (local.get $i) (i32.const 4)))
+                (br $each))))
+        (func (export "procraft_canvas_new") (param i32 i32) (result i32)
+            (i32.store (i32.const 0) (i32.const 0))
+            (i32.store (i32.const 4) (i32.const 0x000000FF))
+            (i32.store (i32.const 8) (i32.const 0))
+            (i32.const 0))
+        (func (export "procraft_canvas_tool") (param $tool i32) (param $colour i32) (param f32) (param f32)
+            (i32.store (i32.const 8) (local.get $tool))
+            (i32.store (i32.const 4) (local.get $colour)))
+        (func (export "procraft_canvas_touch") (param $phase i32) (param $x f32) (param $y f32) (param f32) (result i32)
+            (local $n i32) (local $i i32) (local $keep i32) (local $at i32) (local $dx f32) (local $dy f32)
+            (local.set $n (i32.load (i32.const 0)))
+            ;; called off: as many marks as it began with
+            (if (i32.eq (local.get $phase) (i32.const 3))
+                (then
+                    (if (i32.lt_u (i32.load (i32.const 12)) (local.get $n))
+                        (then (i32.store (i32.const 0) (i32.load (i32.const 12))) (return (i32.const 1))))
+                    (return (i32.const 0))))
+            (if (i32.eqz (local.get $phase)) (then (i32.store (i32.const 12) (local.get $n))))
+            (if (i32.eq (i32.load (i32.const 8)) (i32.const 1))
+                (then
+                    (block $done (loop $each
+                        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+                        (local.set $at (i32.add (i32.const 64) (i32.mul (local.get $i) (i32.const 12))))
+                        (local.set $dx (f32.sub (f32.load (local.get $at)) (local.get $x)))
+                        (local.set $dy (f32.sub (f32.load offset=4 (local.get $at)) (local.get $y)))
+                        (if (f32.ge (f32.add (f32.mul (local.get $dx) (local.get $dx)) (f32.mul (local.get $dy) (local.get $dy))) (f32.const 64))
+                            (then
+                                (call $copy (i32.add (i32.const 64) (i32.mul (local.get $keep) (i32.const 12))) (local.get $at) (i32.const 12))
+                                (local.set $keep (i32.add (local.get $keep) (i32.const 1)))))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br $each)))
+                    (i32.store (i32.const 0) (local.get $keep))
+                    (return (i32.ne (local.get $keep) (local.get $n)))))
+            (if (i32.ge_u (local.get $n) (i32.const 256)) (then (return (i32.const 0))))
+            (local.set $at (i32.add (i32.const 64) (i32.mul (local.get $n) (i32.const 12))))
+            (f32.store (local.get $at) (local.get $x))
+            (f32.store offset=4 (local.get $at) (local.get $y))
+            (i32.store offset=8 (local.get $at) (i32.load (i32.const 4)))
+            (i32.store (i32.const 0) (i32.add (local.get $n) (i32.const 1)))
+            (i32.const 1))
+        (func (export "procraft_canvas_draw") (result i32)
+            (local $n i32) (local $i i32) (local $m i32) (local $o i32) (local $x f32) (local $y f32)
+            (local.set $n (i32.load (i32.const 0)))
+            (local.set $o (i32.const 8192))
+            (block $done (loop $each
+                (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+                (local.set $m (i32.add (i32.const 64) (i32.mul (local.get $i) (i32.const 12))))
+                (local.set $x (f32.load (local.get $m)))
+                (local.set $y (f32.load offset=4 (local.get $m)))
+                (i32.store (local.get $o) (i32.const 1))
+                (i32.store offset=4 (local.get $o) (i32.load offset=8 (local.get $m)))
+                (i32.store offset=8 (local.get $o) (i32.const 0))
+                (f32.store offset=12 (local.get $o) (f32.const 0))
+                (i32.store offset=16 (local.get $o) (i32.const 0))
+                (i32.store offset=20 (local.get $o) (i32.const 2))
+                (f32.store offset=24 (local.get $o) (f32.sub (local.get $x) (f32.const 5)))
+                (f32.store offset=28 (local.get $o) (f32.sub (local.get $y) (f32.const 5)))
+                (i32.store offset=32 (local.get $o) (i32.const 3))
+                (f32.store offset=36 (local.get $o) (f32.add (local.get $x) (f32.const 5)))
+                (f32.store offset=40 (local.get $o) (f32.sub (local.get $y) (f32.const 5)))
+                (i32.store offset=44 (local.get $o) (i32.const 3))
+                (f32.store offset=48 (local.get $o) (f32.add (local.get $x) (f32.const 5)))
+                (f32.store offset=52 (local.get $o) (f32.add (local.get $y) (f32.const 5)))
+                (i32.store offset=56 (local.get $o) (i32.const 3))
+                (f32.store offset=60 (local.get $o) (f32.sub (local.get $x) (f32.const 5)))
+                (f32.store offset=64 (local.get $o) (f32.add (local.get $y) (f32.const 5)))
+                (i32.store offset=68 (local.get $o) (i32.const 5))
+                (local.set $o (i32.add (local.get $o) (i32.const 72)))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $each)))
+            (i32.sub (local.get $o) (i32.const 8192)))
+        (func (export "procraft_canvas_out") (result i32) (i32.const 8192))
+        (func (export "procraft_canvas_save") (result i32)
+            (local $len i32)
+            (local.set $len (i32.mul (i32.load (i32.const 0)) (i32.const 12)))
+            (i32.store (i32.const 8192) (i32.load (i32.const 0)))
+            (call $copy (i32.const 8196) (i32.const 64) (local.get $len))
+            (i32.add (local.get $len) (i32.const 4)))
+        (func (export "procraft_canvas_in") (param i32) (result i32) (i32.const 40000))
+        (func (export "procraft_canvas_load") (result i32)
+            (local $n i32)
+            (local.set $n (i32.load (i32.const 40000)))
+            (if (i32.gt_u (local.get $n) (i32.const 256)) (then (return (i32.const 1))))
+            (i32.store (i32.const 0) (local.get $n))
+            (call $copy (i32.const 64) (i32.const 40004) (i32.mul (local.get $n) (i32.const 12)))
+            (i32.const 0)))"#;
 
     /// A picture: red across, green down, the hue in blue.
     pub(crate) const PICTURE: &str =

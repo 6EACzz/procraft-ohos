@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "io.github.artcraftandroid.radial-segments",
   "name": "Radial symmetry segments",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "holds": ["hooks"],
   "publisher": { "name": "ProCraft" },
   "description": "Radial symmetry makes as many parts as you choose, not only eight.",

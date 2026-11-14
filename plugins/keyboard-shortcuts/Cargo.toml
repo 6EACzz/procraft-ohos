@@ -1,10 +1,10 @@
 [package]
-name = "vector-canvas"
+name = "keyboard-shortcuts"
 version = "1.0.0"
 edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
-description = "A plugin for ProCraft: artworks whose strokes are kept as curves, not pixels"
+description = "A plugin for ProCraft: pick a keyboard shortcut and press the new keys"
 
 [lib]
 crate-type = ["cdylib"]

@@ -23,7 +23,7 @@ const MANIFEST: &str = "craft-extension.json";
 /// The manifest format read here: a newer one may mean anything, so it is refused.
 const SCHEMA: u64 = 1;
 /// What a plugin's code is written to, see [`crate::plugin_run`]: a newer one is refused too.
-const INTERFACE: u32 = 2;
+const INTERFACE: u32 = 3;
 /// What ids of our own start with: no file may claim one.
 const OWN_PREFIX: &str = "procraft.";
 /// The file, its entries, one entry, all of them unpacked, and the manifest, in bytes.
@@ -48,6 +48,8 @@ const MOST_CONTROLS: usize = 8;
 const MOST_FILES: usize = 8;
 /// The folder in a plugin's home where the files picked for its file controls are kept.
 const CHOSEN: &str = "chosen";
+/// What a plugin's code keeps of its own (`procraft_keep`), a file in its home.
+const KEPT: &str = "kept";
 const MOST_HOOKS: usize = 8;
 /// The reason a stopped plugin gives, in bytes.
 const MOST_STOP_NOTE: usize = 200;
@@ -125,6 +127,8 @@ pub(crate) struct Manifest {
     pub actions: Vec<crate::plugins::PluginAction>,
     /// The kinds of artwork it makes.
     pub kinds: Vec<crate::plugin_canvas::PluginKind>,
+    /// The kinds of layer it adds (interface 3).
+    pub layer_kinds: Vec<crate::plugin_canvas::PluginKind>,
     pub permissions: Vec<crate::plugin_commands::PluginPermission>,
     files: Vec<Listed>,
 }
@@ -190,13 +194,88 @@ struct RawManifest {
     actions: Vec<RawAction>,
     #[serde(default)]
     kinds: Vec<RawKind>,
+    #[serde(default)]
+    layer_kinds: Vec<RawKind>,
 }
 
-/// A kind of artwork a plugin makes: its key and its name in the gallery's menu.
+/// A kind of artwork a plugin makes: its key and its name in the gallery's menu (or a kind of
+/// layer, and what its thumbnails show it by).
 #[derive(Deserialize)]
 struct RawKind {
     key: String,
     label: String,
+    #[serde(default)]
+    badge: Option<RawBadge>,
+    #[serde(default)]
+    exports: Vec<RawExport>,
+}
+
+/// A file a kind of layer's plugin makes of its layers: its key, what Share calls it, its
+/// extension and media type.
+#[derive(Deserialize)]
+struct RawExport {
+    key: String,
+    label: String,
+    extension: String,
+    mime: String,
+}
+
+/// The most files a kind of layer can be exported as.
+const MOST_EXPORTS: usize = 4;
+
+/// Whether `raw` holds up: a key, words to show, a short extension of lower-case letters and digits,
+/// and a media type as they are written.
+fn export_fits(raw: &RawExport) -> bool {
+    let ext = &raw.extension;
+    let mime = &raw.mime;
+    valid_key(&raw.key)
+        && !raw.label.trim().is_empty()
+        && shows_plainly(&raw.label, 40)
+        && (1..=8).contains(&ext.len())
+        && ext.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && mime.len() <= 64
+        && mime.split_once('/').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty())
+        && mime.bytes().all(|b| b.is_ascii_alphanumeric() || b"/+.-".contains(&b))
+}
+
+/// A kind of layer's badge, as its manifest draws it (see [`crate::PluginBadge`]).
+#[derive(Deserialize)]
+struct RawBadge {
+    #[serde(default)]
+    lines: Vec<RawBadgeLine>,
+    #[serde(default)]
+    dots: Vec<f32>,
+}
+
+#[derive(Deserialize)]
+struct RawBadgeLine {
+    points: Vec<f32>,
+    #[serde(default)]
+    curved: bool,
+}
+
+/// The most lines a badge has, numbers a line has, and dots a badge has.
+const MOST_BADGE_LINES: usize = 8;
+const MOST_LINE_NUMBERS: usize = 64;
+const MOST_BADGE_DOTS: usize = 8;
+
+/// The badge `raw` draws, if it holds up: a few lines of whole points (a curved one a start and
+/// three for each curve), a few dots, every number in its box.
+fn badge_of(raw: RawBadge) -> Option<crate::PluginBadge> {
+    let in_box = |v: &[f32]| v.len().is_multiple_of(2) && v.iter().all(|n| n.is_finite() && (0.0..=1.0).contains(n));
+    let lines_fit = raw.lines.len() <= MOST_BADGE_LINES
+        && raw.lines.iter().all(|l| {
+            let points = l.points.len() / 2;
+            in_box(&l.points)
+                && l.points.len() <= MOST_LINE_NUMBERS
+                && points >= 2
+                && (!l.curved || (points - 1).is_multiple_of(3))
+        });
+    let dots_fit = raw.dots.len() <= MOST_BADGE_DOTS * 2 && in_box(&raw.dots);
+    (lines_fit && dots_fit && !(raw.lines.is_empty() && raw.dots.is_empty())).then(|| crate::PluginBadge {
+        lines: raw.lines.into_iter().map(|l| crate::BadgeLine { points: l.points, curved: l.curved }).collect(),
+        dots: raw.dots,
+    })
 }
 
 /// The most kinds of artwork a plugin may make.
@@ -552,8 +631,9 @@ fn read_manifest(text: &[u8]) -> Result<Manifest, Refusal> {
             }
             hooks.push(hook);
         }
-        // code steps in somewhere, does something when tapped, or makes artworks of its own
-        if hooks.is_empty() && raw.actions.is_empty() && raw.kinds.is_empty() {
+        // code steps in somewhere, does something when tapped, or makes artworks or layers of its
+        // own
+        if hooks.is_empty() && raw.actions.is_empty() && raw.kinds.is_empty() && raw.layer_kinds.is_empty() {
             return Err(Refusal::Described);
         }
     } else if !raw.hooks.is_empty() {
@@ -594,8 +674,51 @@ fn read_manifest(text: &[u8]) -> Result<Manifest, Refusal> {
     let kinds: Vec<crate::plugin_canvas::PluginKind> = raw
         .kinds
         .into_iter()
-        .map(|k| crate::plugin_canvas::PluginKind { key: format!("{id}.{}", k.key), label: k.label })
+        .map(|k| crate::plugin_canvas::PluginKind {
+            key: format!("{id}.{}", k.key),
+            label: k.label,
+            badge: None,
+            exports: Vec::new(),
+        })
         .collect();
+    // kinds of layer, for code written to interface 3 or later: on the layers hook while it has any
+    let layered = has(PluginPart::Hooks) && compat.interface.is_some_and(|interface| interface >= 3);
+    let mut layer_keys = HashSet::new();
+    let layer_kinds_fit = raw.layer_kinds.len() <= MOST_KINDS
+        && raw.layer_kinds.iter().all(|k| valid_key(&k.key) && plain(&k.label) && layer_keys.insert(k.key.clone()));
+    if !layer_kinds_fit || (!layered && !raw.layer_kinds.is_empty()) {
+        return Err(Refusal::Described);
+    }
+    // each with the badge its thumbnails show it by, if it draws one that holds up
+    let mut layer_kinds: Vec<crate::plugin_canvas::PluginKind> = Vec::new();
+    for k in raw.layer_kinds {
+        let badge = match k.badge {
+            Some(raw) => Some(badge_of(raw).ok_or(Refusal::Described)?),
+            None => None,
+        };
+        // and the files its plugin makes of its layers
+        let mut export_keys = HashSet::new();
+        if k.exports.len() > MOST_EXPORTS
+            || !k.exports.iter().all(|e| export_fits(e) && export_keys.insert(e.key.clone()))
+        {
+            return Err(Refusal::Described);
+        }
+        let key = format!("{id}.{}", k.key);
+        let exports = k
+            .exports
+            .into_iter()
+            .map(|e| crate::PluginExport {
+                key: format!("{key}.{}", e.key),
+                label: e.label,
+                extension: e.extension,
+                mime: e.mime,
+            })
+            .collect();
+        layer_kinds.push(crate::plugin_canvas::PluginKind { key, label: k.label, badge, exports });
+    }
+    if !layer_kinds.is_empty() {
+        hooks.push(Hook::Layers);
+    }
     // a place this app doesn't have is for a newer one
     let mut actions = Vec::new();
     for a in raw.actions {
@@ -618,6 +741,7 @@ fn read_manifest(text: &[u8]) -> Result<Manifest, Refusal> {
         brush_controls,
         actions,
         kinds,
+        layer_kinds,
         permissions,
         files,
     })
@@ -768,10 +892,12 @@ pub(crate) fn keep(dir: &Path, package: &Package) -> Result<PathBuf, Refusal> {
         let _ = std::fs::remove_dir_all(&stage);
         return Err(Refusal::NotKept);
     }
-    // other versions go, now this one stands
+    // other versions go, now this one stands; what it keeps beside them stays
     if let Ok(versions) = std::fs::read_dir(&home) {
         for version in versions.flatten() {
-            if version.file_name().to_str() != Some(package.manifest.version.as_str()) {
+            let name = version.file_name();
+            let other = name.to_str().is_some_and(|v| v != package.manifest.version && v != CHOSEN && v != KEPT);
+            if other {
                 let _ = std::fs::remove_dir_all(version.path());
             }
         }
@@ -779,8 +905,6 @@ pub(crate) fn keep(dir: &Path, package: &Package) -> Result<PathBuf, Refusal> {
     Ok(folder)
 }
 
-/// Takes plugin `id`'s folder out of `dir`: gone from the next read on, even if what is moved
-/// aside can't be deleted now (the next start tries again). False if it stays.
 /// Where the file picked for `key`, a control of plugin `id` kept in `dir`, is kept (a sound as a
 /// WAV file), and the name it was picked by beside it. They go with the plugin.
 pub(crate) fn chosen_paths(dir: &Path, id: &str, key: &str) -> (PathBuf, PathBuf) {
@@ -788,6 +912,29 @@ pub(crate) fn chosen_paths(dir: &Path, id: &str, key: &str) -> (PathBuf, PathBuf
     (folder.join(format!("{key}.wav")), folder.join(format!("{key}.name")))
 }
 
+/// What plugin `id`, kept in `dir`, keeps of its own, if anything holds up.
+pub(crate) fn read_kept(dir: &Path, id: &str) -> Option<Vec<u8>> {
+    read_capped(&dir.join(id).join(KEPT), plugin_run::MOST_KEPT)
+}
+
+/// Keeps `data` for plugin `id`, kept in `dir`, whole: written beside, then moved into place, so a
+/// start finds what it kept before or now, never part of it. It goes with the plugin. False if it
+/// couldn't be (the plugin is gone, say).
+pub(crate) fn write_kept(dir: &Path, id: &str, data: &[u8]) -> bool {
+    let home = dir.join(id);
+    if data.len() > plugin_run::MOST_KEPT || !home.is_dir() {
+        return false;
+    }
+    let beside = spare(&home, KEPT);
+    let moved = write_new(&beside, data).and_then(|()| std::fs::rename(&beside, home.join(KEPT)));
+    if moved.is_err() {
+        let _ = std::fs::remove_file(&beside);
+    }
+    moved.map_err(|e| log::warn!("couldn't keep what a plugin keeps: {e}")).is_ok()
+}
+
+/// Takes plugin `id`'s folder out of `dir`: gone from the next read on, even if what is moved
+/// aside can't be deleted now (the next start tries again). False if it stays.
 pub(crate) fn forget(dir: &Path, id: &str) -> bool {
     clear_stopped(dir, id);
     let home = dir.join(id);
@@ -1007,8 +1154,14 @@ pub(crate) fn read_all(dir: &Path) -> Vec<Manifest> {
         let Ok(versions) = std::fs::read_dir(entry.path()) else { continue };
         let mut newest: Option<Manifest> = None;
         for version in versions.flatten() {
-            // the files picked for its controls, beside its versions
-            if version.file_name() == CHOSEN {
+            // the files picked for its controls and what it keeps, beside its versions; what was
+            // left half written goes
+            let name = version.file_name();
+            if name == CHOSEN || name == KEPT {
+                continue;
+            }
+            if name.to_str().is_some_and(|n| n.starts_with('.')) {
+                let _ = std::fs::remove_file(version.path());
                 continue;
             }
             let folder = version.path();
@@ -1619,7 +1772,7 @@ pub(crate) mod tests {
         };
         // a hook or an interface this app doesn't have is for a newer one
         assert_eq!(of("/hooks", json!(["position", "layers"])), Refusal::Newer);
-        assert_eq!(of("/compat/procraft/interface", json!(3)), Refusal::Newer);
+        assert_eq!(of("/compat/procraft/interface", json!(4)), Refusal::Newer);
         assert_eq!(of("/hooks", json!([])), Refusal::Described);
         assert_eq!(of("/hooks", json!(["position", "position"])), Refusal::Described);
         assert_eq!(of("/compat/procraft", json!({ "min_app": "0.0.1" })), Refusal::Described);
@@ -1716,7 +1869,17 @@ pub(crate) mod tests {
 
     /// A plugin that makes dots (`DOTS`), its kinds as `kinds` says.
     pub(crate) fn dots_file(id: &str, kinds: Value) -> Vec<u8> {
-        let module = wat::parse_str(crate::plugin_run::tests::DOTS).unwrap();
+        artwork_file(id, kinds, crate::plugin_run::tests::DOTS)
+    }
+
+    /// A plugin that makes artworks of marks (`MARKS`), its kinds as `kinds` says.
+    pub(crate) fn marks_file(id: &str, kinds: Value) -> Vec<u8> {
+        artwork_file(id, kinds, crate::plugin_run::tests::MARKS)
+    }
+
+    /// A plugin making artworks of its own, of kinds `kinds`, with the code `text` (WAT).
+    fn artwork_file(id: &str, kinds: Value, text: &str) -> Vec<u8> {
+        let module = wat::parse_str(text).unwrap();
         let mut manifest = coded(id, &module);
         manifest["compat"]["procraft"]["interface"] = json!(2);
         manifest["hooks"] = json!([]);
@@ -1728,8 +1891,12 @@ pub(crate) mod tests {
     fn a_plugin_lists_the_kinds_of_artwork_it_makes() {
         let dots = json!([{ "key": "dots", "label": "Dots" }]);
         let package = read_package(&dots_file("org.example.dots", dots)).unwrap();
-        let kind =
-            crate::plugin_canvas::PluginKind { key: "org.example.dots.dots".to_owned(), label: "Dots".to_owned() };
+        let kind = crate::plugin_canvas::PluginKind {
+            key: "org.example.dots.dots".to_owned(),
+            label: "Dots".to_owned(),
+            badge: None,
+            exports: Vec::new(),
+        };
         assert_eq!(package.manifest.kinds, [kind]);
         // each key once, words to show, not too many
         let twice = json!([{ "key": "a", "label": "A" }, { "key": "a", "label": "B" }]);
@@ -1743,6 +1910,68 @@ pub(crate) mod tests {
         manifest["compat"]["procraft"]["interface"] = json!(2);
         manifest["kinds"] = json!([{ "key": "dots", "label": "Dots" }]);
         assert_eq!(refusal(&a_coded_file(&manifest, &module)), Refusal::Code);
+    }
+
+    #[test]
+    fn a_plugin_written_to_interface_3_lists_the_kinds_of_layer_it_adds() {
+        let (_, file) = crate::bundled::BUNDLED.iter().find(|(name, _)| *name == "vector-layers").unwrap();
+        let package = read_package(file).unwrap();
+        let id = "io.github.artcraftandroid.vector-layers";
+        // its badge a curve between two nodes
+        let curve = crate::BadgeLine { points: vec![0.22, 0.72, 0.38, 0.05, 0.62, 0.95, 0.78, 0.28], curved: true };
+        let badge = crate::PluginBadge { lines: vec![curve], dots: vec![0.22, 0.72, 0.78, 0.28] };
+        // and an SVG picture of its layers, made by it
+        let svg = crate::PluginExport {
+            key: format!("{id}.vector.svg"),
+            label: "SVG (vector layers)".to_owned(),
+            extension: "svg".to_owned(),
+            mime: "image/svg+xml".to_owned(),
+        };
+        let kind = crate::plugin_canvas::PluginKind {
+            key: format!("{id}.vector"),
+            label: "Vector layer".to_owned(),
+            badge: Some(badge),
+            exports: vec![svg],
+        };
+        assert_eq!(package.manifest.layer_kinds, [kind]);
+        assert_eq!(package.manifest.hooks, [Hook::Layers], "on the layers hook, not named");
+        let module = package.file(MODULE).unwrap().to_vec();
+        let manifest: Value = serde_json::from_slice(package.manifest_text()).unwrap();
+        let of = |path: &str, value: Value| refusal(&a_coded_file(&with(manifest.clone(), path, value), &module));
+        // an older interface has no kinds of layer; each key once, words to show, not too many
+        assert_eq!(of("/compat/procraft/interface", json!(2)), Refusal::Described);
+        let twice = json!([{ "key": "a", "label": "A" }, { "key": "a", "label": "B" }]);
+        assert_eq!(of("/layer_kinds", twice), Refusal::Described);
+        assert_eq!(of("/layer_kinds", json!([{ "key": "a", "label": " " }])), Refusal::Described);
+        let many: Vec<Value> = (0..5).map(|i| json!({ "key": format!("k{i}"), "label": "K" })).collect();
+        assert_eq!(of("/layer_kinds", json!(many)), Refusal::Described);
+        // a badge of whole points in its box, curves of a start and three each, or none at all
+        let badged = |badge: Value| json!([{ "key": "a", "label": "A", "badge": badge }]);
+        assert_eq!(of("/layer_kinds", badged(json!({ "lines": [{ "points": [0, 0, 2, 1] }] }))), Refusal::Described);
+        let bent = json!({ "lines": [{ "points": [0, 0, 1, 1, 0, 1], "curved": true }] });
+        assert_eq!(of("/layer_kinds", badged(bent)), Refusal::Described);
+        assert_eq!(of("/layer_kinds", badged(json!({ "dots": [0.5] }))), Refusal::Described);
+        assert_eq!(of("/layer_kinds", badged(json!({}))), Refusal::Described);
+        let plain = json!([{ "key": "a", "label": "A" }]);
+        let unbadged = read_package(&a_coded_file(&with(manifest.clone(), "/layer_kinds", plain), &module)).unwrap();
+        assert_eq!(unbadged.manifest.layer_kinds[0].badge, None);
+        // exports with a key, words, a short plain extension and a media type
+        let exported = |e: Value| json!([{ "key": "a", "label": "A", "exports": [e] }]);
+        let good = json!({ "key": "svg", "label": "SVG", "extension": "svg", "mime": "image/svg+xml" });
+        assert!(read_package(&a_coded_file(&with(manifest.clone(), "/layer_kinds", exported(good)), &module)).is_ok());
+        let dotted = json!({ "key": "svg", "label": "SVG", "extension": ".svg", "mime": "image/svg+xml" });
+        assert_eq!(of("/layer_kinds", exported(dotted)), Refusal::Described);
+        let bare = json!({ "key": "svg", "label": "SVG", "extension": "svg", "mime": "svg" });
+        assert_eq!(of("/layer_kinds", exported(bare)), Refusal::Described);
+        // the layers hook can't be named, and code without its calls can't say it adds any
+        assert_eq!(of("/hooks", json!(["layers"])), Refusal::Newer);
+        let other = a_module();
+        let mut lacking = coded("org.example.plugin", &other);
+        lacking["compat"]["procraft"]["interface"] = json!(3);
+        lacking["layer_kinds"] = json!([{ "key": "vector", "label": "Vector layer" }]);
+        assert_eq!(refusal(&a_coded_file(&lacking, &other)), Refusal::Code);
+        // and the import screen says what it lets the plugin do
+        assert!(crate::Plugins::new().inspect(file.to_vec()).message.contains("kinds of layer"));
     }
 
     #[test]

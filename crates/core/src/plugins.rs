@@ -11,6 +11,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crate::KeyCombo;
 use crate::hooks::Hooks;
 use crate::plugin_file::{self, Added, Manifest, Refusal};
 use crate::plugin_run::{Hook, Running, Stop};
@@ -212,6 +213,8 @@ pub struct PluginInfo {
     pub actions: Vec<PluginAction>,
     /// The kinds of artwork it makes, while it is on (the gallery's + lists them).
     pub kinds: Vec<crate::PluginKind>,
+    /// The kinds of layer it adds, while it is on (the Layers panel's + lists them).
+    pub layer_kinds: Vec<crate::PluginKind>,
     pub permissions: Vec<crate::plugin_commands::PluginPermission>,
 }
 
@@ -389,6 +392,7 @@ fn from_file(manifest: Manifest) -> PluginInfo {
         brush_controls: manifest.brush_controls,
         actions: manifest.actions,
         kinds: manifest.kinds,
+        layer_kinds: manifest.layer_kinds,
         permissions: manifest.permissions,
     }
 }
@@ -595,14 +599,18 @@ impl Plugins {
         }
         let values: Vec<f32> = plugin.controls.iter().map(PluginControl::number).collect();
         let store = self.store.as_deref();
-        let code = store.and_then(|store| plugin_file::read_code(store, &plugin.id, &plugin.version));
-        let started = code
-            .ok_or(Stop::Damaged)
-            .and_then(|(hooks, bytes)| Ok((Running::start_on(&bytes, &values, &hooks, &plugin.permissions)?, hooks)));
-        match started {
+        match self.start_code(&plugin.id, &plugin.version, &values, &plugin.permissions) {
             Ok((running, hooks)) => {
                 self.hooks.put_on(plugin.id.clone(), running, &hooks);
+                // a copy of its own for its events
+                if hooks.iter().any(|h| matches!(h, Hook::StrokeKept | Hook::LayerAdded))
+                    && let Ok((events, _)) = self.start_code(&plugin.id, &plugin.version, &values, &plugin.permissions)
+                {
+                    self.hooks.give_events(&plugin.id, events);
+                }
                 self.hooks.brush_keys(&plugin.id, plugin.brush_controls.iter().map(|c| c.key.clone()).collect());
+                // the kinds of layer it adds, for the sessions' layers of them to go through it
+                self.hooks.layer_kinds(&plugin.id, plugin.layer_kinds.clone());
                 // a picker's picture, for the sessions to draw
                 if hooks.contains(&Hook::Picker)
                     && let Some(text) =
@@ -624,6 +632,68 @@ impl Plugins {
                 self.hooks.failed(&plugin.id, stop);
                 plugin.on = false;
                 plugin.problem = Some(stop.text().to_owned());
+            }
+        }
+    }
+
+    /// The code of plugin `id` at `version` started, told `values`, what it keeps and (on the key
+    /// hook) the app's shortcuts, reaching what `permissions` give; with its hooks.
+    fn start_code(
+        &self,
+        id: &str,
+        version: &str,
+        values: &[f32],
+        permissions: &[crate::plugin_commands::PluginPermission],
+    ) -> Result<(Running, Vec<Hook>), Stop> {
+        let store = self.store.as_deref().ok_or(Stop::Damaged)?;
+        let (hooks, bytes) = plugin_file::read_code(store, id, version).ok_or(Stop::Damaged)?;
+        let kept = plugin_file::read_kept(store, id);
+        Ok((Running::start_told(&bytes, values, &hooks, permissions, kept.as_deref())?, hooks))
+    }
+
+    /// What `running`, a copy of `id`'s code that has just acted, says to keep: kept with the
+    /// plugin, and handed to its other copies.
+    fn keep_from(&self, id: &str, running: &mut Running) -> Result<(), Stop> {
+        if let Some(data) = running.take_keep()? {
+            if let Some(store) = &self.store {
+                plugin_file::write_kept(store, id, &data);
+            }
+            self.hooks.give_kept(id, &data);
+        }
+        Ok(())
+    }
+
+    /// What a copy of `id`'s code showing the panel (`running`) answered a touch or a key press
+    /// with: the panel shown changed, or closed, unless another took its place meanwhile. False once
+    /// it is closed.
+    fn panel_answered(
+        &self,
+        id: &str,
+        running: &Arc<Mutex<Running>>,
+        answer: Result<(Option<crate::PluginPanel>, bool), Stop>,
+    ) -> bool {
+        let mut open = self.open_panel();
+        let same = open.as_ref().is_some_and(|panel| Arc::ptr_eq(&panel.running, running));
+        match answer {
+            Ok((shows, false)) => {
+                if let (true, Some(shows), Some(panel)) = (same, shows, open.as_mut()) {
+                    panel.shows = shows;
+                }
+                same
+            }
+            Ok((_, true)) => {
+                if same {
+                    *open = None;
+                }
+                false
+            }
+            Err(stop) => {
+                if same {
+                    *open = None;
+                }
+                drop(open);
+                self.hooks.stopped(id, stop);
+                false
             }
         }
     }
@@ -962,15 +1032,14 @@ impl Plugins {
         let Some((id, version, index, values, permissions)) = found else { return false };
         // another action closes a panel open
         *self.open_panel() = None;
-        let code = self.store.as_deref().and_then(|store| plugin_file::read_code(store, &id, &version));
-        let started = code
-            .ok_or(Stop::Damaged)
-            .and_then(|(hooks, bytes)| Running::start_on(&bytes, &values, &hooks, &permissions));
-        let ran = started.and_then(|mut running| {
+        let started = self.start_code(&id, &version, &values, &permissions);
+        let ran = started.and_then(|(mut running, _)| {
             let step = session.plugin_step();
             let ran = running.action(index, Arc::clone(&session));
             drop(step);
-            ran.map(|()| running)
+            ran?;
+            self.keep_from(&id, &mut running)?;
+            Ok(running)
         });
         match ran {
             Ok(mut running) => {
@@ -996,6 +1065,13 @@ impl Plugins {
         on.flat_map(|p| p.kinds.iter().cloned()).collect()
     }
 
+    /// The kinds of layer the plugins on add, for the Layers panel's +.
+    pub fn layer_kinds(&self) -> Vec<crate::PluginKind> {
+        let list = self.listed();
+        let on = list.files.iter().filter(|p| p.on && p.problem.is_none());
+        on.flat_map(|p| p.layer_kinds.iter().cloned()).collect()
+    }
+
     /// An artwork of kind `kind` (`<id>.<key>`) opened, in a copy of its plugin's code of its own:
     /// a new one `width` × `height`, or the one its saved `data` holds. None if no plugin on makes
     /// that kind, or it couldn't (one that stops goes off, and says why).
@@ -1016,12 +1092,8 @@ impl Plugins {
             })
         };
         let (id, version, values, permissions) = found?;
-        let code = self.store.as_deref().and_then(|store| plugin_file::read_code(store, &id, &version));
-        let started = code
-            .ok_or(Stop::Damaged)
-            .and_then(|(hooks, bytes)| Running::start_on(&bytes, &values, &hooks, &permissions));
-        let running = match started {
-            Ok(running) => running,
+        let running = match self.start_code(&id, &version, &values, &permissions) {
+            Ok((running, _)) => running,
             Err(stop) => {
                 self.hooks.stopped(&id, stop);
                 return None;
@@ -1066,33 +1138,42 @@ impl Plugins {
         let step = session.plugin_step();
         let ran = code.panel_event(row, value, Arc::clone(&session));
         drop(step);
-        let answer = ran.map(|()| code.take_panel());
+        let answer = ran.and_then(|()| {
+            let shown = code.take_panel();
+            self.keep_from(&id, &mut code)?;
+            Ok(shown)
+        });
         drop(code);
         // what it answered, unless that panel was closed meanwhile (or another took its place)
-        let mut open = self.open_panel();
-        let same = open.as_ref().is_some_and(|panel| Arc::ptr_eq(&panel.running, &running));
-        match answer {
-            Ok((shows, false)) => {
-                if let (true, Some(shows), Some(panel)) = (same, shows, open.as_mut()) {
-                    panel.shows = shows;
-                }
-                same
-            }
-            Ok((_, true)) => {
-                if same {
-                    *open = None;
-                }
-                false
-            }
-            Err(stop) => {
-                if same {
-                    *open = None;
-                }
-                drop(open);
-                self.hooks.stopped(&id, stop);
-                false
-            }
-        }
+        self.panel_answered(&id, &running, answer)
+    }
+
+    /// The key `press` (its key named as [`crate::key_shortcut`] takes it) while the panel open asks
+    /// for one: told to its plugin, on the artwork `session`, as a touch on it is (it may show the
+    /// panel changed, or close it). The panel asked for that press alone, and asks again for another.
+    /// A long call, not for the main thread. False if no panel open asked for it.
+    pub fn panel_key(&self, press: KeyCombo, session: Arc<crate::CanvasSession>) -> bool {
+        let press = KeyCombo::of(&press.key, press.command, press.shift, press.alt);
+        let (id, running) = {
+            let mut open = self.open_panel();
+            let Some(panel) = open.as_mut().filter(|panel| panel.shows.key_press && press.named_plainly()) else {
+                return false;
+            };
+            panel.shows.key_press = false;
+            (panel.id.clone(), Arc::clone(&panel.running))
+        };
+        let mut code = running.lock().unwrap_or_else(|e| e.into_inner());
+        let step = session.plugin_step();
+        let ran = code.panel_key(&press, Arc::clone(&session));
+        drop(step);
+        let answer = ran.and_then(|()| {
+            let shown = code.take_panel();
+            self.keep_from(&id, &mut code)?;
+            Ok(shown)
+        });
+        drop(code);
+        self.panel_answered(&id, &running, answer);
+        true
     }
 
     /// The panel open closed (its close button, or a tap away from it).
@@ -1231,6 +1312,41 @@ impl Plugins {
     pub fn accent_colour(&self) -> Option<u32> {
         self.hooks().interface_colour(0)
     }
+
+    /// A hardware keyboard's `press` on the canvas (its key named as [`crate::key_shortcut`] takes
+    /// it) as a plugin rebinding keys takes it: itself, another press, or none at all (it does
+    /// nothing). With none on, itself.
+    pub fn key_press(&self, press: KeyCombo) -> Option<KeyCombo> {
+        let press = KeyCombo::of(&press.key, press.command, press.shift, press.alt);
+        if !press.named_plainly() {
+            return Some(press);
+        }
+        self.hooks().key_shortcut(press)
+    }
+
+    /// The shortcut on a press: what [`crate::key_shortcut`] says of the press a plugin rebinding
+    /// keys takes it as ([`Plugins::key_press`]).
+    pub fn key_shortcut(
+        &self,
+        key: String,
+        command: bool,
+        shift: bool,
+        alt: bool,
+        transforming: bool,
+    ) -> Option<crate::KeyShortcut> {
+        let press = self.key_press(KeyCombo { key, command, shift, alt })?;
+        crate::key_shortcut(press.key, press.command, press.shift, press.alt, transforming)
+    }
+
+    /// The keyboard shortcuts' list as [`crate::key_shortcut_list`] has it, with the keys a plugin
+    /// rebinding them says do each now.
+    pub fn key_shortcut_list(&self, desktop: bool, mac: bool) -> Vec<crate::ShortcutGroup> {
+        let hooks = self.hooks();
+        if !hooks.rebinds_keys() {
+            return crate::key_shortcut_list(desktop, mac);
+        }
+        crate::keys::shortcut_list_now(desktop, mac, |press| hooks.key_shortcut_keys(press))
+    }
 }
 
 #[cfg(test)]
@@ -1288,6 +1404,7 @@ mod tests {
             brush_controls: Vec::new(),
             actions: Vec::new(),
             kinds: Vec::new(),
+            layer_kinds: Vec::new(),
             permissions: Vec::new(),
             id: "someone.stranger".to_owned(),
             name: "Stranger".to_owned(),
@@ -1870,6 +1987,35 @@ mod tests {
     }
 
     #[test]
+    fn an_update_keeps_what_the_plugin_keeps_and_the_files_picked_for_it() {
+        let dir = store("update-kept");
+        let plugins = at(&dir);
+        let id = "org.example.plugin";
+        assert_eq!(plugins.install(slider_file(id, "cut", "1.2.0")), None);
+        let store = std::path::Path::new(&dir);
+        assert_eq!(plugin_file::read_kept(store, id), None);
+        assert!(plugin_file::write_kept(store, id, b"bound"));
+        let (picked, _) = plugin_file::chosen_paths(store, id, "sound");
+        std::fs::create_dir_all(picked.parent().unwrap()).unwrap();
+        std::fs::write(&picked, b"RIFF").unwrap();
+        assert_eq!(plugins.install(slider_file(id, "cut", "1.3.0")), None);
+        assert_eq!(plugin_file::read_kept(store, id).as_deref(), Some(&b"bound"[..]));
+        assert!(picked.is_file(), "the file picked stays");
+        // a start reads it as it was, the files beside its version passed over
+        let next = at(&dir);
+        assert_eq!(next.plugins().len(), 1);
+        assert_eq!(next.plugins()[0].version, "1.3.0");
+        // too much isn't kept, nor anything for a plugin that isn't there
+        assert!(!plugin_file::write_kept(store, id, &vec![0; crate::plugin_run::MOST_KEPT + 1]));
+        assert!(!plugin_file::write_kept(store, "org.example.gone", b"x"));
+        assert_eq!(plugin_file::read_kept(store, id).as_deref(), Some(&b"bound"[..]));
+        // it goes with the plugin
+        assert!(plugins.remove(id.to_owned()).is_some());
+        assert_eq!(plugin_file::read_kept(store, id), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_refused_file_leaves_nothing_behind() {
         let dir = store("refused");
         let plugins = at(&dir);
@@ -1984,7 +2130,8 @@ mod tests {
         assert!(plugins.kinds().is_empty(), "off until turned on");
         assert!(plugins.set_on(id.to_owned(), true));
         let kind = format!("{id}.dots");
-        assert_eq!(plugins.kinds(), [crate::PluginKind { key: kind.clone(), label: "Dots".to_owned() }]);
+        let dots = crate::PluginKind { key: kind.clone(), label: "Dots".to_owned(), badge: None, exports: Vec::new() };
+        assert_eq!(plugins.kinds(), [dots]);
         let canvas = plugins.open_canvas(kind.clone(), 40, 30, None).expect("opened");
         assert_eq!((canvas.width(), canvas.height()), (40, 30));
         let red_at = |c: &crate::PluginCanvas, x: usize, y: usize| {

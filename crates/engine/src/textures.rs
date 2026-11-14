@@ -70,6 +70,9 @@ pub mod shape {
     pub const SLIM_OVAL: u32 = 52;
     pub const ULTRA_SOFT_ROUND: u32 = 53;
     pub const STOCK_BLOT: u32 = 54;
+    pub const STOCK_HOOK: u32 = 55;
+    pub const STOCK_GRAINY_SQUARE: u32 = 56;
+    pub const STOCK_LINE: u32 = 57;
 }
 
 /// Grains, by index.
@@ -113,6 +116,32 @@ pub mod grain {
     pub const ROUGH_CANVAS: u32 = 36;
     pub const SPRAYED: u32 = 37;
     pub const DRY_PATCHES: u32 = 38;
+    pub const GRAPH_PAPER: u32 = 39;
+    pub const DOT_GRID: u32 = 40;
+    pub const DOTTED_STAR: u32 = 41;
+    pub const DIAGONAL_STRIPES: u32 = 42;
+    pub const FINE_GRID: u32 = 43;
+    pub const SOFT_DOTS: u32 = 44;
+    pub const LABYRINTH: u32 = 45;
+}
+
+/// How many pixels wide the stock image our grain `index` is drawn to the proportions of is (a
+/// pattern, not a texture like it), so that it stands in for it at the stock image's own tile
+/// rather than by feature size; none for any other grain. Only a grain fixed to the canvas goes by
+/// the width: one read stamp by stamp is read as the image is, at the moving grain's tile.
+pub fn drawn_to_stock_width(index: u32) -> Option<f32> {
+    match index {
+        grain::GRAPH_PAPER | grain::DOT_GRID | grain::DOTTED_STAR | grain::LABYRINTH => Some(2048.0),
+        grain::DIAGONAL_STRIPES | grain::FINE_GRID => Some(1024.0),
+        grain::SOFT_DOTS => Some(1792.0),
+        _ => None,
+    }
+}
+
+/// Whether our grain `index` is drawn to a stock image's proportions (see
+/// [`drawn_to_stock_width`]).
+pub fn drawn_to_stock_size(index: u32) -> bool {
+    drawn_to_stock_width(index).is_some()
 }
 
 /// The Coarse grain's tooth: below this the fibres darken it, by this much a unit.
@@ -148,16 +177,372 @@ pub fn stock_grain_tones(name: &str) -> Option<[u8; 9]> {
     stock_tones(crate::stock_tones::STOCK_GRAIN_TONES, name)
 }
 
+/// The sides at which [`stock_grain_features`] gives a stock grain's feature size: the image as a
+/// tile that size on the canvas shows it (no finer than its own).
+pub const FEATURE_SIDES: [f32; 4] = [1024.0, 512.0, 256.0, 128.0];
+
+/// How big the features of the stock grain a brush file names `name` are, as a share of its side
+/// (how far it shifts before it matches itself only half), at each of [`FEATURE_SIDES`], as
+/// measured, if it is one we know.
+pub fn stock_grain_features(name: &str) -> Option<[f32; 4]> {
+    let table = crate::stock_tones::STOCK_GRAIN_FEATURES;
+    let key = name_key(name);
+    let at = table.binary_search_by_key(&key, |&(k, _)| k).ok()?;
+    table.get(at).map(|&(_, v)| v.map(|v| f32::from(v) / 65536.0))
+}
+
+/// How coarse the texture of the stock shape a brush file names `name` is, as measured: the feature
+/// size of what is left of it with its broad outline taken away, as a share of its side; `Some(None)`
+/// for one with no texture of its own (solid or smooth), none if it is one we don't know.
+pub fn stock_shape_feature(name: &str) -> Option<Option<f32>> {
+    let table = crate::stock_tones::STOCK_SHAPE_FEATURES;
+    let key = name_key(name);
+    let at = table.binary_search_by_key(&key, |&(k, _)| k).ok()?;
+    table.get(at).map(|&(_, [v])| (v < u16::MAX).then(|| f32::from(v) / 65536.0))
+}
+
+/// The grainy square (shape [`shape::STOCK_GRAINY_SQUARE`]) with a texture as coarse as `feature`
+/// (a share of its side, as [`stock_shape_feature`] measures it), or smooth for none, its texture
+/// as strong as `cover` (the share of the real tip that is ink) wants: a tip of few marks takes it
+/// at full contrast, so that once its tones are put on it its marks fall scattered where the
+/// texture says; a fuller tip at under half, so that its soft edge stays below its middle and its
+/// marks don't open into holes. What a stock tip stands in as. Made once for each size and
+/// strength of mark.
+pub fn grainy_square_of(feature: Option<f32>, cover: f32) -> Vec<u8> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock, PoisonError};
+    // each made, by the half width of its marks and their strength
+    type Made = Mutex<HashMap<(u32, u32), Vec<u8>>>;
+    static MADE: OnceLock<Made> = OnceLock::new();
+    // the mark's half width in texels, to a quarter (0: smooth)
+    let half = feature.map_or(0, |f| ((f * TEXTURE_SIZE as f32 * 4.0).round() as u32).clamp(1, 4 * 64));
+    // how strong the texture is: full for a twentieth of ink or less, 0.45 from a fifth up, in
+    // twentieths
+    let strength = 0.45 + 0.55 * ((0.2 - cover) / 0.15).clamp(0.0, 1.0);
+    let key = (half, (strength * 20.0).round() as u32);
+    let strength = key.1 as f32 / 20.0;
+    // coarser than the square's own marks: those, which have finer detail in them too (one
+    // softening at that size alone would leave smooth blobs where a coarse tip has streaks)
+    if half > (COARSEST_OWN_MARK * TEXTURE_SIZE as f32 * 4.0) as u32 {
+        return shapes().into_iter().nth(shape::STOCK_GRAINY_SQUARE as usize).map(|g| g.pixels).unwrap_or_default();
+    }
+    let made = MADE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(pixels) = made.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+        return pixels.clone();
+    }
+    let n = TEXTURE_SIZE;
+    let texture: Vec<f32> = if half == 0 {
+        // smooth: brightest in the middle, a little less out to the edge (a flat middle would leave
+        // its tones to fall anywhere in it)
+        (0..n * n)
+            .map(|k| {
+                let (x, y) = (((k % n) as f32 + 0.5) / n as f32, ((k / n) as f32 + 0.5) / n as f32);
+                1.0 - radius(x, y).min(1.0)
+            })
+            .collect()
+    } else {
+        marks(half)
+    };
+    let pixels = field(|x, y| {
+        let (u, v) = ((x - 0.5).abs() * 2.0, (y - 0.5).abs() * 2.0);
+        let r = (u.powi(4) + v.powi(4)).powf(0.25);
+        let (i, j) = (((x * n as f32) as usize).min(n - 1), ((y * n as f32) as usize).min(n - 1));
+        let t = texture.get(j * n + i).copied().unwrap_or(1.0);
+        smooth(((0.96 - r) * 24.0).clamp(0.0, 1.0)) * (1.0 - strength + strength * t)
+    });
+    made.lock().unwrap_or_else(PoisonError::into_inner).insert(key, pixels.clone());
+    pixels
+}
+
+/// `pixels`, one of our shapes standing in for a stock tip, given a texture as fine as `feature` (as
+/// [`stock_shape_feature`] measures it) as strongly as `cover` wants (see [`grainy_square_of`]):
+/// a smooth shape standing in for a textured tip takes its marks. None where there is nothing to
+/// add (no texture, or one coarser than [`COARSEST_OWN_MARK`]).
+pub fn textured_shape(pixels: &[u8], feature: Option<f32>, cover: f32) -> Option<Vec<u8>> {
+    let f = feature?;
+    let half = ((f * TEXTURE_SIZE as f32 * 4.0).round() as u32).clamp(1, 4 * 64);
+    if half > (COARSEST_OWN_MARK * TEXTURE_SIZE as f32 * 4.0) as u32 || pixels.len() != TEXTURE_SIZE * TEXTURE_SIZE {
+        return None;
+    }
+    let strength = 0.45 + 0.55 * ((0.2 - cover) / 0.15).clamp(0.0, 1.0);
+    let texture = marks(half);
+    Some(
+        pixels
+            .iter()
+            .zip(&texture)
+            .map(|(&v, &t)| (f32::from(v) * (1.0 - strength + strength * t)).round().clamp(0.0, 255.0) as u8)
+            .collect(),
+    )
+}
+
+/// White noise softened until it matches itself only half at `half` quarter texels (a Gaussian's
+/// softening of sigma s does at about 1.665 s), wrapping round, its values spread evenly over 0..1:
+/// marks of that size. Made once for each.
+fn marks(half: u32) -> Vec<f32> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock, PoisonError};
+    static MADE: OnceLock<Mutex<HashMap<u32, Vec<f32>>>> = OnceLock::new();
+    let made = MADE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(texture) = made.lock().unwrap_or_else(PoisonError::into_inner).get(&half) {
+        return texture.clone();
+    }
+    let n = TEXTURE_SIZE;
+    let sigma = (half as f32 / 4.0) / 1.665;
+    let raw: Vec<f32> = (0..n * n).map(|k| hash((k % n) as i32, (k / n) as i32, 6101)).collect();
+    let soft = if sigma < 0.35 { raw } else { gaussian_wrapped(&raw, n, sigma) };
+    let mut order: Vec<(f32, usize)> = soft.iter().copied().zip(0..).collect();
+    order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut even = vec![0.0; n * n];
+    for (rank, &(_, k)) in order.iter().enumerate() {
+        if let Some(v) = even.get_mut(k) {
+            *v = rank as f32 / (n * n - 1) as f32;
+        }
+    }
+    made.lock().unwrap_or_else(PoisonError::into_inner).insert(half, even.clone());
+    even
+}
+
+/// The coarsest marks [`grainy_square_of`] makes, as a share of its side: past them the grainy
+/// square's own (about as coarse, with finer detail in them) stand in.
+const COARSEST_OWN_MARK: f32 = 0.04;
+
+/// `values` (an `n` square) softened by a Gaussian of `sigma` texels across and down, wrapping round.
+fn gaussian_wrapped(values: &[f32], n: usize, sigma: f32) -> Vec<f32> {
+    let reach = (sigma * 3.0).ceil() as i32;
+    let weights: Vec<f32> = (-reach..=reach).map(|d| (-(d * d) as f32 / (2.0 * sigma * sigma)).exp()).collect();
+    let total: f32 = weights.iter().sum();
+    let pass = |src: &[f32], across: bool| -> Vec<f32> {
+        (0..n * n)
+            .map(|k| {
+                let (i, j) = ((k % n) as i32, (k / n) as i32);
+                let mut v = 0.0;
+                for (w, d) in weights.iter().zip(-reach..=reach) {
+                    let (x, y) =
+                        if across { ((i + d).rem_euclid(n as i32), j) } else { (i, (j + d).rem_euclid(n as i32)) };
+                    v += w * src.get(y as usize * n + x as usize).copied().unwrap_or(0.0);
+                }
+                v / total
+            })
+            .collect()
+    };
+    pass(&pass(values, true), false)
+}
+
+/// The feature size `features` (see [`stock_grain_features`]) shows at a tile `tile` canvas pixels
+/// on a side: between the levels it falls between, by their sides' logarithms.
+pub fn feature_at_tile(features: &[f32; 4], tile: f32) -> f32 {
+    let level = (FEATURE_SIDES[0].log2() - tile.max(1.0).log2()).clamp(0.0, (FEATURE_SIDES.len() - 1) as f32);
+    let low = level.floor() as usize;
+    let f = level - low as f32;
+    let at = |i: usize| features.get(i.min(features.len() - 1)).copied().unwrap_or(0.0);
+    at(low) * (1.0 - f) + at(low + 1) * f
+}
+
+/// How big the features of our grain `index` are, as [`stock_grain_feature`] measures a stock
+/// one, worked out the first time it is asked for: none for a grain with no pattern.
+pub fn grain_feature(index: u32) -> Option<f32> {
+    static FEATURES: std::sync::OnceLock<Vec<std::sync::OnceLock<Option<f32>>>> = std::sync::OnceLock::new();
+    let all = FEATURES.get_or_init(|| (0..grains().len()).map(|_| std::sync::OnceLock::new()).collect());
+    let slot = all.get(index as usize)?;
+    *slot.get_or_init(|| {
+        let grain = GRAINS.get_or_init(make_grains).get(index as usize)?;
+        feature_share(&grain.pixels, TEXTURE_SIZE)
+    })
+}
+
+/// How far a square tile `n` on a side shifts (wrapping round) before it matches itself only half
+/// (its autocorrelation falls to 0.5), across and down averaged, as a share of its side; none for
+/// a flat one.
+fn feature_share(pixels: &[u8], n: usize) -> Option<f32> {
+    if pixels.len() != n * n || n == 0 {
+        return None;
+    }
+    let mean = pixels.iter().map(|&v| f64::from(v)).sum::<f64>() / pixels.len() as f64;
+    let g: Vec<f64> = pixels.iter().map(|&v| f64::from(v) - mean).collect();
+    let power: f64 = g.iter().map(|v| v * v).sum();
+    if power < 1e-6 * pixels.len() as f64 {
+        return None;
+    }
+    let shifted = |k: usize, across: bool| -> f64 {
+        let mut sum = 0.0;
+        for y in 0..n {
+            for x in 0..n {
+                let (sx, sy) = if across { ((x + k) % n, y) } else { (x, (y + k) % n) };
+                let at = |i: usize| g.get(i).copied().unwrap_or(0.0);
+                sum += at(y * n + x) * at(sy * n + sx);
+            }
+        }
+        sum / power
+    };
+    let half = |across: bool| -> f64 {
+        let mut before = 1.0;
+        for k in 1..n / 2 {
+            let now = shifted(k, across);
+            if now <= 0.5 {
+                return ((k - 1) as f64 + (before - 0.5) / (before - now).max(1e-9)) / n as f64;
+            }
+            before = now;
+        }
+        0.5
+    };
+    Some(((half(true) + half(false)) / 2.0) as f32)
+}
+
 /// The tones of the stock shape a brush file names `name`, as measured: its values at
-/// [`SHAPE_TONE_SHARES`], if it is one we know.
-pub fn stock_shape_tones(name: &str) -> Option<[u8; 17]> {
-    stock_tones(crate::stock_tones::STOCK_SHAPE_TONES, name)
+/// [`SHAPE_TONE_SHARES`] (of it inverted, for a brush that inverts it), if it is one we know.
+pub fn stock_shape_tones(name: &str, inverted: bool) -> Option<[u8; 17]> {
+    let tones = stock_tones(crate::stock_tones::STOCK_SHAPE_TONES, name)?;
+    // inverted, the darkest share is what was the lightest (the shares run evenly both ways)
+    Some(if inverted {
+        std::array::from_fn(|i| 255 - tones.get(tones.len() - 1 - i).copied().unwrap_or(0))
+    } else {
+        tones
+    })
 }
 
 /// How much ink each of 64 bands of the stock shape `name`'s rows holds, top to bottom, as shares
-/// of its fullest (0..255), as measured, if it is one we know.
-pub fn stock_shape_rows(name: &str) -> Option<[u8; 64]> {
-    stock_tones(crate::stock_tones::STOCK_SHAPE_ROWS, name)
+/// of its fullest (0..255), as measured (of it inverted, for a brush that inverts it), if it is
+/// one we know.
+pub fn stock_shape_rows(name: &str, inverted: bool) -> Option<[u8; 64]> {
+    stock_tones(crate::stock_tones::STOCK_SHAPE_ROWS, name).map(|means| band_shares(&means, inverted))
+}
+
+/// The same of its columns, left to right.
+pub fn stock_shape_cols(name: &str, inverted: bool) -> Option<[u8; 64]> {
+    stock_tones(crate::stock_tones::STOCK_SHAPE_COLS, name).map(|means| band_shares(&means, inverted))
+}
+
+/// Bands' mean values as the ink each holds, as shares of the fullest (0..255): the means
+/// themselves, or what they leave of white for an inverted image.
+fn band_shares(means: &[u8; 64], inverted: bool) -> [u8; 64] {
+    let ink = means.map(|m| if inverted { 255 - m } else { m });
+    let top = u32::from(ink.iter().copied().max().unwrap_or(0).max(1));
+    ink.map(|v| ((u32::from(v) * 255 + top / 2) / top).min(255) as u8)
+}
+
+/// A halftone tip: round dots on a lattice, the lattice's two sets of rows as the cycles of each
+/// across and down the tile (`lattice`), each dot as big as the ink there says: the ink a stock tip
+/// holds row by row and column by column (`rows`, `cols`, as [`stock_shape_rows`] gives them),
+/// all of it `cover` of the tile on average. A stand-in for a stock tip printed in dots, whose
+/// stroke shows their rows where the stamps overlap.
+pub fn halftone_shape(lattice: [(f32, f32); 2], rows: &[u8; 64], cols: &[u8; 64], cover: f32) -> Vec<u8> {
+    let [(ax, ay), (bx, by)] = lattice;
+    let det = ax * by - ay * bx;
+    if det.abs() < 1e-6 {
+        return vec![0; TEXTURE_SIZE * TEXTURE_SIZE];
+    }
+    // the area of the tile each dot has (a share of the tile)
+    let cell = 1.0 / det.abs();
+    let band = |bands: &[u8; 64], t: f32| {
+        let place = (t * bands.len() as f32 - 0.5).clamp(0.0, (bands.len() - 1) as f32);
+        let (low, f) = (place.floor() as usize, place.fract());
+        let at = |i: usize| f32::from(bands.get(i.min(bands.len() - 1)).copied().unwrap_or(0)) / 255.0;
+        at(low) * (1.0 - f) + at(low + 1) * f
+    };
+    // how much of its cell each dot fills, from the ink across and down, scaled until the whole
+    // averages `cover` (held to the cell: past it the dots run together)
+    let n = TEXTURE_SIZE;
+    let ink: Vec<f32> = (0..n * n)
+        .map(|k| {
+            let (x, y) = (((k % n) as f32 + 0.5) / n as f32, ((k / n) as f32 + 0.5) / n as f32);
+            (band(rows, y) * band(cols, x)).sqrt()
+        })
+        .collect();
+    let target = cover.clamp(0.0, 1.0) * ink.len() as f32;
+    let filled = |k: f32| ink.iter().map(|&v| (v * k).min(1.0)).sum::<f32>();
+    let (mut low, mut high) = (0.0f32, 64.0f32);
+    for _ in 0..40 {
+        let mid = (low + high) / 2.0;
+        if filled(mid) < target { low = mid } else { high = mid }
+    }
+    let scale = (low + high) / 2.0;
+    field(|x, y| {
+        // the nearest dot: the point's place in each set of rows, to the nearest whole row, back
+        // across the tile
+        let (p, q) = (ax * x + ay * y, bx * x + by * y);
+        let (dp, dq) = (p - p.round(), q - q.round());
+        let (dx, dy) = ((by * dp - ay * dq) / det, (ax * dq - bx * dp) / det);
+        let distance = dx.hypot(dy);
+        let (i, j) = (((x * n as f32) as usize).min(n - 1), ((y * n as f32) as usize).min(n - 1));
+        let share = (ink.get(j * n + i).copied().unwrap_or(0.0) * scale).min(1.0);
+        let radius = (share * cell / std::f32::consts::PI).sqrt();
+        ((radius - distance) * n as f32 + 0.5).clamp(0.0, 1.0)
+    })
+}
+
+/// `pixels`, a shape, stretched across and down so that the bands of its rows and columns holding
+/// ink span as many as `rows` and `cols` (a stock tip's, as [`stock_shape_rows`] gives them) say
+/// theirs do, and lie where theirs lie: a stand-in as wide and tall as the tip it stands for. Only
+/// ever grown: a soft tip's faint rim, under a twentieth of its fullest band, still paints, so a tip
+/// that measures smaller than ours is no sure sign that ours reaches too far. None where it already
+/// is (within a twentieth), or where either holds no ink.
+pub fn fitted_to_box(pixels: &[u8], rows: &[u8; 64], cols: &[u8; 64]) -> Option<Vec<u8>> {
+    let n = TEXTURE_SIZE;
+    if pixels.len() != n * n {
+        return None;
+    }
+    let per = n / rows.len();
+    let mut ours_rows = [0.0f32; 64];
+    let mut ours_cols = [0.0f32; 64];
+    for (i, &v) in pixels.iter().enumerate() {
+        if let Some(r) = ours_rows.get_mut(i / n / per) {
+            *r += f32::from(v);
+        }
+        if let Some(c) = ours_cols.get_mut(i % n / per) {
+            *c += f32::from(v);
+        }
+    }
+    // the first and last band holding a twentieth of the fullest band's ink, as texels (end past)
+    let span = |bands: &[f32]| {
+        let top = bands.iter().copied().fold(0.0, f32::max);
+        if top <= 0.0 {
+            return None;
+        }
+        let first = bands.iter().position(|&b| b > top * 0.05)?;
+        let last = bands.iter().rposition(|&b| b > top * 0.05)?;
+        Some(((first * per) as f32, ((last + 1) * per) as f32))
+    };
+    let theirs = |bands: &[u8; 64]| span(&bands.map(f32::from));
+    let ((oy0, oy1), (ox0, ox1)) = (span(&ours_rows)?, span(&ours_cols)?);
+    let ((ty0, ty1), (tx0, tx1)) = (theirs(rows)?, theirs(cols)?);
+    // how far ours stretches each way (grown, to twice at most), about the middles of the two boxes
+    let (sx, sy) = (((ox1 - ox0) / (tx1 - tx0)).clamp(0.5, 1.0), ((oy1 - oy0) / (ty1 - ty0)).clamp(0.5, 1.0));
+    let (ocx, ocy, tcx, tcy) = ((ox0 + ox1) / 2.0, (oy0 + oy1) / 2.0, (tx0 + tx1) / 2.0, (ty0 + ty1) / 2.0);
+    let off = |a: f32, b: f32| (a - b).abs() / n as f32;
+    if sx > 0.95 && sy > 0.95 && off(ocx, tcx) < 0.05 && off(ocy, tcy) < 0.05 {
+        return None;
+    }
+    let at = |x: i32, y: i32| {
+        if x < 0 || y < 0 || x >= n as i32 || y >= n as i32 {
+            0.0
+        } else {
+            f32::from(pixels.get(y as usize * n + x as usize).copied().unwrap_or(0))
+        }
+    };
+    Some(
+        (0..n * n)
+            .map(|k| {
+                // where in ours this texel of theirs falls, read between texels
+                let (x, y) = ((k % n) as f32 + 0.5, (k / n) as f32 + 0.5);
+                let (u, v) = (ocx + (x - tcx) * sx - 0.5, ocy + (y - tcy) * sy - 0.5);
+                let (i, j) = (u.floor() as i32, v.floor() as i32);
+                let (fx, fy) = (u - u.floor(), v - v.floor());
+                let top = at(i, j) * (1.0 - fx) + at(i + 1, j) * fx;
+                let bottom = at(i, j + 1) * (1.0 - fx) + at(i + 1, j + 1) * fx;
+                (top * (1.0 - fy) + bottom * fy).round().clamp(0.0, 255.0) as u8
+            })
+            .collect(),
+    )
+}
+
+/// `pixels`, a shape, its rows weighted as [`striped`] weights them, then its columns as `cols`
+/// says the same way: a stand-in takes a stock shape's outline across as well as down.
+pub fn shaped(pixels: &[u8], rows: &[u8; 64], cols: &[u8; 64]) -> Vec<u8> {
+    let n = TEXTURE_SIZE;
+    let down = striped(pixels, rows);
+    let turned =
+        |p: &[u8]| -> Vec<u8> { (0..n * n).map(|k| p.get((k % n) * n + k / n).copied().unwrap_or(0)).collect() };
+    turned(&striped(&turned(&down), cols))
 }
 
 /// `pixels`, a shape, its rows weighted so that how much ink each band of them holds goes as
@@ -193,11 +578,66 @@ pub fn striped(pixels: &[u8], rows: &[u8; 64]) -> Vec<u8> {
     pixels.iter().enumerate().map(|(i, &v)| (f32::from(v) * at(i / n) / most).round().clamp(0.0, 255.0) as u8).collect()
 }
 
-fn stock_tones<const N: usize>(table: &[(u64, [u8; N])], name: &str) -> Option<[u8; N]> {
-    let base = name.rsplit(['/', '\\']).next().unwrap_or(name).to_lowercase();
-    // FNV-1a, as the table's keys are
-    let key = base.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+fn stock_tones<T: Copy, const N: usize>(table: &[(u64, [T; N])], name: &str) -> Option<[T; N]> {
+    let key = name_key(name);
     table.binary_search_by_key(&key, |&(k, _)| k).ok().and_then(|i| table.get(i)).map(|&(_, t)| t)
+}
+
+/// How many octaves of noise [`octave_grain`] lays together.
+pub const OCTAVES: usize = 8;
+
+/// How much of a stock grain's side our stand-in drawn by its octaves spans (see [`octave_grain`]):
+/// a quarter, its texels the image's pixels with the image at 1024 a side.
+pub const OCTAVE_SHARE: f32 = 0.25;
+
+/// How wide the stock grain a brush file names `name` is (pixels), and how strong each octave of
+/// [`octave_grain`]'s noise is (finest first) for it to vary as much at each size as that image
+/// does, as measured, if it is one we know.
+pub fn stock_grain_octaves(name: &str) -> Option<(f32, [f32; OCTAVES])> {
+    let [width, octaves @ ..] = stock_tones(crate::stock_tones::STOCK_GRAIN_OCTAVES, name)?;
+    Some((f32::from(width), octaves.map(|a| f32::from(a) / 10000.0)))
+}
+
+/// Whether our grain `index` stands in for a stock grain by the stock image's own octaves of noise
+/// (see [`octave_grain`]) where they were measured: papers and washes, whose fibres, veins and
+/// blotches, each at its own size, our patterns of them lack.
+pub fn drawn_by_octaves(index: u32) -> bool {
+    matches!(index, grain::SHEET | grain::WASH | grain::WORN)
+}
+
+/// Noise in [`OCTAVES`] octaves as `amplitudes` says (finest first: cells of 1, 2, 4 ... texels),
+/// each a random value at its cells' corners eased between them, wrapping round so it tiles; its
+/// values then moved onto `tones` (a stock grain's, at [`TONE_SHARES`]) keeping their order. A
+/// stand-in that varies as much at each size as the stock image it was measured from.
+pub fn octave_grain(amplitudes: &[f32; OCTAVES], tones: &[u8; 9]) -> Vec<u8> {
+    let n = TEXTURE_SIZE;
+    let raw: Vec<f32> = (0..n * n)
+        .map(|k| {
+            let (i, j) = ((k % n) as f32 + 0.5, (k / n) as f32 + 0.5);
+            amplitudes
+                .iter()
+                .enumerate()
+                .filter(|&(_, &amplitude)| amplitude > 0.0)
+                .map(|(octave, &amplitude)| {
+                    // (each cell's corner on a texel's middle: the finest octave is the texels'
+                    // own values)
+                    let cell = (1u32 << octave) as f32;
+                    let period = (n >> octave).max(1) as i32;
+                    let seed = 9001 + octave as u32 * 7919;
+                    amplitude * (value_noise(i / cell - 0.5, j / cell - 0.5, period, seed) - 0.5)
+                })
+                .sum()
+        })
+        .collect();
+    let spread: Vec<(f32, f32)> = tones.iter().zip(TONE_SHARES).map(|(&t, s)| (f32::from(t) / 255.0, s)).collect();
+    ranked(&raw, &spread)
+}
+
+/// The key the stock tables keep an image's measurements under: FNV-1a of its file's name in lower
+/// case.
+fn name_key(name: &str) -> u64 {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name).to_lowercase();
+    base.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 /// `pixels`, a shape, with its values moved onto `tones` (its values at `shares`) keeping their
@@ -841,7 +1281,71 @@ fn make_shapes() -> Vec<GrayImage> {
             (0.5 + dx * out, 0.5 + dy * out)
         }),
     });
+    // a calligraphic hook: one curved stroke from the lower left, a thin tail at first, swelling as
+    // it rises, curling over at the top right and thinning out again, so a stroke that sweeps it
+    // paints a broad band (a stock tip of one such curve's stand-in)
+    shapes.push(GrayImage { name: "Hook", pixels: hook() });
+    // grain filling nearly all of the square, its corners rounded off: what a stock tip we know
+    // nothing of but how its ink lies across and down stands in as (see [`shaped`]), so a bar, a
+    // block or a slab can take its outline where a disc couldn't
+    shapes.push(GrayImage {
+        name: "Grainy square",
+        pixels: field(|x, y| {
+            let (u, v) = ((x - 0.5).abs() * 2.0, (y - 0.5).abs() * 2.0);
+            let r = (u.powi(4) + v.powi(4)).powf(0.25);
+            let n = fbm(x * 12.0, y * 12.0, 12, 3, 13);
+            smooth(((0.96 - r) * 24.0).clamp(0.0, 1.0)) * (0.55 + 0.45 * n).clamp(0.0, 1.0)
+        }),
+    });
+    // a thin straight line corner to corner, its ends tapered: a spike's stand-in
+    shapes.push(GrayImage {
+        name: "Line",
+        pixels: field(|x, y| {
+            // along the diagonal from the lower left, and how far off it
+            let (u, v) = (x - 0.5, 0.5 - y);
+            let along = (u + v) / std::f32::consts::SQRT_2;
+            let off = (u - v).abs() / std::f32::consts::SQRT_2;
+            let reach = 0.66;
+            let thick = 0.012 * (1.0 - (along / reach).powi(2)).max(0.0).sqrt();
+            smooth(((thick - off) * TEXTURE_SIZE as f32 + 0.5).clamp(0.0, 1.0))
+        }),
+    });
     shapes
+}
+
+/// The hook's pixels (see the shape of that name): the distance to a curve sampled along its length,
+/// against how thick the curve is there.
+fn hook() -> Vec<u8> {
+    // a cubic from the lower left up to the top right, then curling back over
+    let curve = |t: f32| {
+        let p = [(0.08f32, 0.92f32), (0.45, 0.80), (0.86, 0.50), (0.82, 0.16)];
+        let u = 1.0 - t;
+        let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+        let x = w.iter().zip(&p).map(|(w, p)| w * p.0).sum::<f32>();
+        let y = w.iter().zip(&p).map(|(w, p)| w * p.1).sum::<f32>();
+        (x, y)
+    };
+    let curl = |t: f32| {
+        // a short arc over to the left at the top
+        let a = std::f32::consts::PI * (0.15 + 0.85 * t);
+        (0.72 + 0.10 * a.cos(), 0.16 - 0.08 * a.sin())
+    };
+    const STEPS: usize = 160;
+    let points: Vec<(f32, f32, f32)> = (0..=STEPS)
+        .map(|i| {
+            let s = i as f32 / STEPS as f32;
+            // the first four fifths along the cubic, the rest round the curl
+            let ((x, y), along) = if s < 0.8 { (curve(s / 0.8), s) } else { (curl((s - 0.8) / 0.2), s) };
+            // a thin tail at the start, widest about seven tenths along, tapering into the curl
+            let thick = 0.005 + 0.042 * (std::f32::consts::PI * along * along).sin().max(0.0);
+            (x, y, thick)
+        })
+        .collect();
+    field(move |x, y| {
+        let inside = points.iter().fold(f32::MIN, |best, &(px, py, thick)| best.max(thick - (x - px).hypot(y - py)));
+        // about a texel of anti-aliasing at the edge
+        smooth((inside * TEXTURE_SIZE as f32 + 0.5).clamp(0.0, 1.0))
+    })
 }
 
 /// An ink blot spread over two thirds of the square, as a stock ink blot's mass, and drops about
@@ -1321,7 +1825,162 @@ fn make_grains() -> Vec<GrayImage> {
     grains.push(GrayImage { name: "Rough canvas", pixels: rough_canvas() });
     grains.push(GrayImage { name: "Sprayed", pixels: ranked(&soft_noise(4201, 0.4), &SPRAYED_SPREAD) });
     grains.push(GrayImage { name: "Dry patches", pixels: dry_patches() });
+    grains.push(GrayImage { name: "Graph paper", pixels: graph_paper() });
+    grains.push(GrayImage { name: "Dot grid", pixels: dot_grid() });
+    grains.push(GrayImage { name: "Dotted star", pixels: dotted_star() });
+    grains.push(GrayImage { name: "Diagonal stripes", pixels: diagonal_stripes() });
+    grains.push(GrayImage { name: "Fine grid", pixels: fine_grid() });
+    grains.push(GrayImage { name: "Soft dots", pixels: soft_dots() });
+    grains.push(GrayImage { name: "Labyrinth", pixels: labyrinth() });
     grains
+}
+
+/// Diagonal stripes, white on black, rising to the right: five of differing widths in each quarter
+/// of the tile across the diagonal (each at a share of that quarter, from its start, and its width
+/// there), about a seventh of it white.
+fn diagonal_stripes() -> Vec<u8> {
+    const STRIPES: [(f32, f32); 5] = [(28.0, 5.0), (48.0, 10.0), (108.0, 10.0), (134.0, 11.0), (210.0, 3.0)];
+    field(|x, y| {
+        // where along a quarter's repeat this texel's diagonal falls, in the stock picture's 256ths
+        let along = ((x + y) * 1024.0).rem_euclid(256.0);
+        let ink = STRIPES.iter().map(|&(at, width)| {
+            let middle = at + width / 2.0;
+            let d = (along - middle).abs().min(256.0 - (along - middle).abs());
+            // a texel here spans 4 of those 256ths across the diagonal and down: smoothed over it
+            ((width / 2.0 - d) / 4.0 + 0.5).clamp(0.0, 1.0)
+        });
+        ink.fold(0.0, f32::max)
+    })
+}
+
+/// A fine grid of white lines on black, twelve to the tile each way, each a 512th of it wide (so
+/// half a texel: grey where it falls), half a square in from the tile's edges.
+fn fine_grid() -> Vec<u8> {
+    field(|x, y| {
+        let line = |v: f32| {
+            let d = wrapped(v * 12.0, 0.5 + 12.0 / 1024.0) / 12.0;
+            mark(d, 1.0 / 1024.0)
+        };
+        line(x).max(line(y))
+    })
+}
+
+/// Dark dots on light, on a staggered lattice: fourteen to the tile across, nine rows of each kind
+/// down, every other row shifted half a dot. Each dot lightens slowly from its middle (93) to its
+/// edge a 50th of the tile out (137), steps up to 171 across it, and fades into the light between
+/// the dots (196) by about a 25th.
+fn soft_dots() -> Vec<u8> {
+    // (distance from the middle in 1792ths of the tile, tone), between which it goes straight
+    const PROFILE: [(f32, f32); 11] = [
+        (0.0, 93.0),
+        (12.0, 100.0),
+        (24.0, 116.0),
+        (30.0, 126.0),
+        (36.0, 137.0),
+        (42.0, 171.0),
+        (48.0, 180.0),
+        (54.0, 186.0),
+        (60.0, 190.0),
+        (72.0, 196.0),
+        (1792.0, 196.0),
+    ];
+    let (across, down) = (14.0f32, 9.0f32);
+    field(|x, y| {
+        let near = |cx: f32, cy: f32| {
+            let (dx, dy) = (wrapped(x * across, cx) / across, wrapped(y * down, cy) / down);
+            // its distance in the tile's widths (rows are farther apart than dots are across)
+            (dx * dx + dy * dy).sqrt()
+        };
+        let d = near(0.0, 0.0).min(near(0.5, 0.5)) * 1792.0;
+        let tone = PROFILE
+            .windows(2)
+            .find_map(|pair| match *pair {
+                [(d0, t0), (d1, t1)] if d <= d1 => Some(t0 + (t1 - t0) * ((d - d0) / (d1 - d0)).clamp(0.0, 1.0)),
+                _ => None,
+            })
+            .unwrap_or(196.0);
+        tone / 255.0
+    })
+}
+
+/// A labyrinth: winding white bands about as wide as the black between them (white a little under
+/// half), some 27 to the tile: band-passed noise cut at the share that leaves that much white.
+fn labyrinth() -> Vec<u8> {
+    let n = TEXTURE_SIZE;
+    let raw: Vec<f32> = (0..n * n).map(|k| hash((k % n) as i32, (k / n) as i32, 7307)).collect();
+    // a band of sizes about the bands' own: the noise softened a little, less it softened twice
+    let (fine, broad) = (gaussian_wrapped(&raw, n, 1.6), gaussian_wrapped(&raw, n, 3.2));
+    let band: Vec<f32> = fine.iter().zip(&broad).map(|(a, b)| a - b).collect();
+    let mut sorted = band.clone();
+    sorted.sort_by(f32::total_cmp);
+    let cut = sorted.get(((n * n) as f32 * 0.55) as usize).copied().unwrap_or(0.0);
+    band.iter().map(|&v| if v > cut { 255 } else { 0 }).collect()
+}
+
+/// How much of a texel at distance `d` (a share of the tile) from a mark's middle line or centre
+/// the mark covers, the mark reaching `half` either way: its edge smoothed over one texel.
+fn mark(d: f32, half: f32) -> f32 {
+    ((half - d) * TEXTURE_SIZE as f32 + 0.5).clamp(0.0, 1.0)
+}
+
+/// How far `v` is from `at`, the tile wrapping round (both shares of it).
+fn wrapped(v: f32, at: f32) -> f32 {
+    let d = (v - at).rem_euclid(1.0);
+    d.min(1.0 - d)
+}
+
+/// Graph paper: dark lines across and down on white, six squares to the tile, the line through
+/// the middle about four times as thick and the one along the edge a little thicker.
+fn graph_paper() -> Vec<u8> {
+    // each line's place and half its width, as shares of the tile
+    const LINES: [(f32, f32); 6] = [
+        (0.0, 0.0039),
+        (1.0 / 6.0, 0.0029),
+        (2.0 / 6.0, 0.0029),
+        (0.5, 0.0114),
+        (4.0 / 6.0, 0.0029),
+        (5.0 / 6.0, 0.0029),
+    ];
+    field(|x, y| {
+        let ink = LINES.iter().map(|&(at, half)| mark(wrapped(x, at), half).max(mark(wrapped(y, at), half)));
+        1.0 - ink.fold(0.0, f32::max)
+    })
+}
+
+/// A dot grid: round dark dots on white, one in the middle of the tile and one at its corners
+/// (so a grid turned a quarter of a right angle), each about a fifteenth of the tile across.
+fn dot_grid() -> Vec<u8> {
+    const HALF: f32 = 0.0322;
+    field(|x, y| {
+        let corner = wrapped(x, 0.0).hypot(wrapped(y, 0.0));
+        let middle = wrapped(x, 0.5).hypot(wrapped(y, 0.5));
+        1.0 - mark(corner.min(middle), HALF)
+    })
+}
+
+/// Dotted lines in a star: round dark dots on white along the middle row and column (eight each
+/// side of the middle, which has none) and along both diagonals (eleven in from each corner).
+fn dotted_star() -> Vec<u8> {
+    const HALF: f32 = 0.015;
+    // along the middle row and column, from the edges in, and along the diagonals from the
+    // corners in (shares of the tile)
+    let straight: Vec<f32> = (0..8).map(|k| (63.9 + 120.0 * k as f32) / 2048.0).collect();
+    let slanted: Vec<f32> = (0..11).map(|k| (58.0 + 84.35 * k as f32) / 2048.0).collect();
+    let mut dots: Vec<(f32, f32)> = Vec::new();
+    for &t in &straight {
+        for along in [t, 1.0 - t] {
+            dots.extend([(along, 0.5), (0.5, along)]);
+        }
+    }
+    for &t in &slanted {
+        for along in [t, 1.0 - t] {
+            dots.extend([(along, along), (along, 1.0 - along)]);
+        }
+    }
+    field(|x, y| {
+        let near = dots.iter().map(|&(dx, dy)| wrapped(x, dx).hypot(wrapped(y, dy))).fold(f32::MAX, f32::min);
+        1.0 - mark(near, HALF)
+    })
 }
 
 /// The sprayed grain's values: light, half over 0.78, hardly any under 0.45 (as measured from a
@@ -1953,6 +2612,31 @@ mod tests {
     }
 
     #[test]
+    fn grains_features_are_measured_as_the_stock_ones_are() {
+        // fine noise has features of about a pixel, bricks of a quarter of the tile
+        let fine = grain_feature(grain::FINE_NOISE).unwrap();
+        let brick = grain_feature(grain::BRICK).unwrap();
+        assert!(fine < 0.01 && brick > 0.1, "{fine} {brick}");
+        assert_eq!(grain_feature(10_000), None);
+        // a flat tile has none; a checker of 8 pixel squares matches itself half 2 pixels over
+        assert_eq!(feature_share(&[7; 64], 8), None);
+        let checker: Vec<u8> = (0..64 * 64).map(|i| if (i % 64 / 8 + i / 64 / 8) % 2 == 0 { 0 } else { 255 }).collect();
+        let share = feature_share(&checker, 64).unwrap();
+        assert!((share - 2.0 / 64.0).abs() < 0.003, "{share}");
+        // the stock table: each name once, in order, every feature some size
+        let table = crate::stock_tones::STOCK_GRAIN_FEATURES;
+        assert!(table.windows(2).all(|w| w[0].0 < w[1].0));
+        assert!(table.iter().all(|&(_, v)| v.iter().all(|&v| v > 0)));
+        assert_eq!(stock_grain_features("no such grain.png"), None);
+        // between levels, by the tile's size
+        let levels = [0.001, 0.002, 0.004, 0.008];
+        assert_eq!(feature_at_tile(&levels, 4096.0), 0.001);
+        assert_eq!(feature_at_tile(&levels, 256.0), 0.004);
+        assert!((feature_at_tile(&levels, 362.0) - 0.003).abs() < 2e-4);
+        assert_eq!(feature_at_tile(&levels, 16.0), 0.008);
+    }
+
+    #[test]
     fn a_retoned_shape_takes_a_round_tips_falloff_from_its_tones() {
         // the soft round moved onto a stock tip's tones keeps its middle the lightest and takes
         // the tones it is given, an empty half to a dim middle
@@ -1967,7 +2651,7 @@ mod tests {
             let got = sorted[((sorted.len() - 1) as f32 * share) as usize];
             assert!(got.abs_diff(want) <= 3, "at {share} {got} for {want}");
         }
-        assert_eq!(stock_shape_tones("no such shape.png"), None);
+        assert_eq!(stock_shape_tones("no such shape.png", false), None);
     }
 
     #[test]
@@ -1982,7 +2666,153 @@ mod tests {
         let row = |y: usize| out[y * n..(y + 1) * n].iter().map(|&v| u32::from(v)).sum::<u32>();
         assert_eq!(row(n / 2), 0);
         assert!(row(n / 2 - 40) > 1000 && row(n / 2 + 40) > 1000, "{} {}", row(n / 2 - 40), row(n / 2 + 40));
-        assert_eq!(stock_shape_rows("no such shape.png"), None);
+        assert_eq!(stock_shape_rows("no such shape.png", false), None);
+    }
+
+    #[test]
+    fn the_grainy_square_takes_the_coarseness_it_is_asked_for() {
+        // fine marks repeat over a short distance, coarse ones over a long one; none is smooth
+        let n = TEXTURE_SIZE;
+        let fine = grainy_square_of(Some(1.5 / n as f32), 0.02);
+        let coarse = grainy_square_of(Some(12.0 / n as f32), 0.02);
+        let smooth = grainy_square_of(None, 0.02);
+        // the share of neighbours across the middle that differ by more than a little
+        let busy = |p: &[u8]| {
+            let row = n / 2;
+            (n / 4..3 * n / 4).filter(|&x| p[row * n + x].abs_diff(p[row * n + x + 1]) > 6).count() as f32
+                / (n / 2) as f32
+        };
+        assert!(busy(&fine) > 3.0 * busy(&coarse), "{} {}", busy(&fine), busy(&coarse));
+        assert_eq!(busy(&smooth), 0.0);
+        // a fuller tip's texture is weaker: its middle stays above its soft edge
+        let full = grainy_square_of(Some(1.5 / n as f32), 0.5);
+        let least_middle = |p: &[u8]| (n / 4..3 * n / 4).map(|x| p[n / 2 * n + x]).min().unwrap_or(0);
+        assert!(
+            least_middle(&full) > 100 && least_middle(&fine) < 40,
+            "{} {}",
+            least_middle(&full),
+            least_middle(&fine)
+        );
+        // the same one twice is the same
+        assert_eq!(grainy_square_of(Some(1.5 / n as f32), 0.02), fine);
+        // another shape takes fine marks; none for no texture or a coarse one
+        let soft = shapes().into_iter().next().unwrap().pixels;
+        let marked = textured_shape(&soft, Some(1.5 / n as f32), 0.02).unwrap();
+        assert!(busy(&marked) > busy(&soft) + 0.2, "{} {}", busy(&marked), busy(&soft));
+        assert_eq!(textured_shape(&soft, None, 0.02), None);
+        assert_eq!(textured_shape(&soft, Some(0.2), 0.02), None);
+        assert_eq!(stock_shape_feature("no such shape.png"), None);
+    }
+
+    #[test]
+    fn the_patterned_grains_draw_their_marks_where_they_should() {
+        let all = grains();
+        let n = TEXTURE_SIZE;
+        let at = |index: u32, x: f32, y: f32| {
+            let px = &all[index as usize].pixels;
+            px[((y * n as f32) as usize).min(n - 1) * n + ((x * n as f32) as usize).min(n - 1)]
+        };
+        // graph paper: dark on its lines (the middle one thickest), white inside a square
+        assert!(at(grain::GRAPH_PAPER, 1.0 / 6.0, 0.08) < 60 && at(grain::GRAPH_PAPER, 0.08, 0.08) > 250);
+        assert!(
+            at(grain::GRAPH_PAPER, 0.5 + 0.009, 0.08) < 60 && at(grain::GRAPH_PAPER, 1.0 / 6.0 + 0.009, 0.08) > 200
+        );
+        // the dot grid: dark in the middle and at the corners, white between
+        assert!(at(grain::DOT_GRID, 0.5, 0.5) < 30 && at(grain::DOT_GRID, 0.0, 0.0) < 30);
+        assert!(at(grain::DOT_GRID, 0.25, 0.25) > 250);
+        // the star: dots along the middle row and the diagonal, none in the very middle
+        assert!(at(grain::DOTTED_STAR, 63.9 / 2048.0, 0.5) < 60 && at(grain::DOTTED_STAR, 0.5, 0.5) > 250);
+        assert!(at(grain::DOTTED_STAR, 58.0 / 2048.0, 58.0 / 2048.0) < 60 && at(grain::DOTTED_STAR, 0.25, 0.1) > 250);
+        assert!(drawn_to_stock_size(grain::DOT_GRID) && !drawn_to_stock_size(grain::PAPER));
+        // diagonal stripes: about a seventh white, the same along the diagonal; the fine grid
+        // white on its lines; soft dots dark in their middles and light between; the labyrinth
+        // a little under half white
+        let share =
+            |index: u32| all[index as usize].pixels.iter().filter(|&&v| v > 128).count() as f32 / (n * n) as f32;
+        assert!((share(grain::DIAGONAL_STRIPES) - 0.15).abs() < 0.03, "{}", share(grain::DIAGONAL_STRIPES));
+        assert_eq!(at(grain::DIAGONAL_STRIPES, 0.2, 0.3), at(grain::DIAGONAL_STRIPES, 0.3, 0.2));
+        let on_line = [0.0405, 0.0425, 0.0445].map(|x| at(grain::FINE_GRID, x, 0.3));
+        assert!(on_line.into_iter().max().unwrap_or(0) > 60 && at(grain::FINE_GRID, 0.0, 0.0) < 20, "{on_line:?}");
+        assert!(at(grain::SOFT_DOTS, 0.0, 0.0) < 110 && at(grain::SOFT_DOTS, 0.5 / 14.0, 0.0) > 180);
+        // its dots' hard edge: dark a 56th of the tile out, light a 40th out
+        assert!(at(grain::SOFT_DOTS, 1.0 / 56.0, 0.0) < 140 && at(grain::SOFT_DOTS, 1.0 / 40.0, 0.0) > 170);
+        assert!((share(grain::LABYRINTH) - 0.45).abs() < 0.02, "{}", share(grain::LABYRINTH));
+        assert_eq!(drawn_to_stock_width(grain::SOFT_DOTS), Some(1792.0));
+    }
+
+    #[test]
+    fn a_paper_stands_in_varying_at_each_size_as_much_as_it_does() {
+        let (width, octaves) = stock_grain_octaves("Wax-Crayon-Paper.jpg").expect("measured");
+        assert_eq!(width, 2048.0);
+        let tones = stock_grain_tones("Wax-Crayon-Paper.jpg").expect("measured");
+        let pixels = octave_grain(&octaves, &tones);
+        let n = TEXTURE_SIZE;
+        let a: Vec<f32> = pixels.iter().map(|&v| f32::from(v) / 255.0).collect();
+        // how much it varies between softenings of `from` and `to` texels
+        let band = |from: f32, to: f32| {
+            let (fine, broad) = (gaussian_wrapped(&a, n, from), gaussian_wrapped(&a, n, to));
+            let d: Vec<f32> = fine.iter().zip(&broad).map(|(f, b)| f - b).collect();
+            let mean = d.iter().sum::<f32>() / d.len() as f32;
+            (d.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / d.len() as f32).sqrt()
+        };
+        // its veins and blotches, 4 to 64 texels: our paper sheet standing in for it had next to
+        // none (0.007 and 0.002), the paper as much as its fibres
+        assert!(band(4.0, 16.0) > 0.025, "{}", band(4.0, 16.0));
+        assert!(band(16.0, 64.0) > 0.015, "{}", band(16.0, 64.0));
+        // with the paper's own tones
+        let mean = a.iter().sum::<f32>() / a.len() as f32;
+        assert!((mean - 0.73).abs() < 0.02, "{mean}");
+        // only papers and washes stand in so
+        assert!(drawn_by_octaves(grain::SHEET) && drawn_by_octaves(grain::WASH));
+        assert!(!drawn_by_octaves(grain::CHARCOAL));
+    }
+
+    #[test]
+    fn a_stand_in_is_stretched_to_the_box_its_stock_tip_inks() {
+        // ours a square across the middle fifth to four fifths...
+        let n = TEXTURE_SIZE;
+        let inside = |v: usize, from: usize, to: usize| v >= from * n / 20 && v < to * n / 20;
+        let square: Vec<u8> =
+            (0..n * n).map(|k| if inside(k % n, 6, 14) && inside(k / n, 6, 14) { 255 } else { 0 }).collect();
+        // ...the stock tip's ink wide (from 10 to 54 of 64 bands across) and as tall but lower (26
+        // to 52 down)
+        let bands =
+            |from: usize, to: usize| std::array::from_fn::<u8, 64, _>(|b| if b >= from && b < to { 255 } else { 0 });
+        let (rows, cols) = (bands(26, 52), bands(10, 54));
+        let fitted = fitted_to_box(&square, &rows, &cols).expect("stretched");
+        let span = |along: bool| {
+            let inked = |i: usize| (0..n).any(|j| fitted[if along { j * n + i } else { i * n + j }] > 127);
+            let first = (0..n).find(|&i| inked(i)).unwrap();
+            let last = (0..n).rev().find(|&i| inked(i)).unwrap();
+            (first, last)
+        };
+        let ((x0, x1), (y0, y1)) = (span(true), span(false));
+        assert!(x0.abs_diff(40) <= 2 && x1.abs_diff(215) <= 2, "{x0}..{x1}");
+        assert!(y0.abs_diff(104) <= 2 && y1.abs_diff(207) <= 2, "{y0}..{y1}");
+        // one as big as its tip already, where it lies, is left alone, and one bigger than its tip
+        // isn't shrunk
+        assert!(fitted_to_box(&square, &bands(19, 45), &bands(19, 45)).is_none());
+        assert!(fitted_to_box(&square, &bands(24, 40), &bands(24, 40)).is_none());
+    }
+
+    #[test]
+    fn a_stock_shape_s_bands_and_tones_turn_round_for_a_brush_that_inverts_it() {
+        // a shape dark on white: inverted, its dark band is where its ink is
+        let mut means = [250u8; 64];
+        means[30] = 10;
+        let plain = band_shares(&means, false);
+        let inverted = band_shares(&means, true);
+        assert!(plain[30] < 20 && plain[0] == 255, "{} {}", plain[30], plain[0]);
+        assert!(inverted[30] == 255 && inverted[0] < 10, "{} {}", inverted[30], inverted[0]);
+        // the columns too: a shape whose ink lies only in its middle columns keeps only those
+        let soft = shapes().into_iter().next().unwrap();
+        let mut cols = [0u8; 64];
+        cols[28..36].fill(255);
+        let rows = [255u8; 64];
+        let out = shaped(&soft.pixels, &rows, &cols);
+        let n = TEXTURE_SIZE;
+        let column = |x: usize| (0..n).map(|y| u32::from(out[y * n + x])).sum::<u32>();
+        assert!(column(n / 2) > 1000 && column(n / 2 - 60) == 0, "{} {}", column(n / 2), column(n / 2 - 60));
     }
 
     #[test]

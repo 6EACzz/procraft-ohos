@@ -1,5 +1,6 @@
-//! Brush and set files as other painting apps share them (`.brush`, `.brushset`): read into the
-//! library, and written from it. A brush's shape and grain images go with it; an image a file only
+//! Brush, set and library files as other painting apps share them (`.brush`, `.brushset`,
+//! `.brushlibrary`): read into the library (a library file as a library of its own), and written
+//! from it. A brush's shape and grain images go with it; an image a file only
 //! names (one that came with the app that made it) is stood in for by the nearest of ours.
 
 use procraft_engine::brush::{
@@ -7,7 +8,9 @@ use procraft_engine::brush::{
     StockImages,
 };
 use procraft_engine::brushfile::{self, BrushFile, Pictures, Texture};
+use procraft_engine::brushlibrary;
 use procraft_engine::curve::Curve;
+use procraft_engine::stroke::LEAST_ROUNDNESS;
 use procraft_engine::textures::{self, TEXTURE_SIZE, grain, shape};
 
 use crate::CanvasSession;
@@ -132,9 +135,11 @@ pub fn is_brush_zip(bytes: Vec<u8>) -> bool {
     procraft_engine::zip::ZipReader::new(&bytes).is_some_and(|zip| brush_names(zip.names()))
 }
 
-/// Whether a zip holding `names` holds brushes.
-pub(crate) fn brush_names<'n>(mut names: impl Iterator<Item = &'n str>) -> bool {
-    names.any(|n| n == "Brush.archive" || n == "brushset.plist" || n.ends_with("/Brush.archive"))
+/// Whether a zip holding `names` holds brushes (a library's among them).
+pub(crate) fn brush_names<'n>(names: impl Iterator<Item = &'n str>) -> bool {
+    let names: Vec<&str> = names.collect();
+    names.iter().any(|n| *n == "Brush.archive" || *n == "brushset.plist" || n.ends_with("/Brush.archive"))
+        || brushlibrary::is_library(names.iter().copied())
 }
 
 /// Brushes read from a file, not yet in the library: reading another app's takes a while, so it
@@ -148,6 +153,27 @@ pub enum ReadBrushes {
     One(Box<Brush>),
     /// A file of ours from before (a set, or a brush for the set shown), as its text.
     Text(String),
+    /// A library of their own called `name` (numbered if another has it): its sets (name, icon,
+    /// brushes) and its tools' brushes (paint, erase, smudge).
+    Library { name: String, sets: Vec<(String, u32, Vec<Brush>)>, tools: [(usize, usize); 3] },
+}
+
+/// A library file's sets in `bytes`, as a library called `name`; none if it isn't one.
+fn read_library(bytes: &[u8], name: String) -> Option<ReadBrushes> {
+    let file = brushlibrary::read(bytes)?;
+    let sets = file
+        .sets
+        .iter()
+        .map(|set| {
+            // its icon as the stock set it names has it
+            let icon = crate::brush_library::shipped_icon(set.icon.as_deref().unwrap_or(&set.name));
+            let brushes = procraft_engine::par::side_by_side(&set.brushes, brush_from).into_iter().flatten().collect();
+            (set.name.clone(), icon, brushes)
+        })
+        .collect();
+    // the file's tools are paint, smudge and erase
+    let [paint, smudge, erase] = file.tools;
+    Some(ReadBrushes::Library { name, sets, tools: [paint, erase, smudge].map(|t| t.unwrap_or((0, 0))) })
 }
 
 /// Our brush file's or set file's brushes in `bytes`.
@@ -175,6 +201,12 @@ pub fn read_any_brushes(bytes: &[u8], file_name: Option<String>) -> Option<ReadB
     let other = name
         .rsplit_once('.')
         .is_some_and(|(_, ext)| OTHER_BRUSH_EXTENSIONS.iter().any(|o| o.eq_ignore_ascii_case(ext)));
+    // a library, by its name or by what the zip holds
+    let library = name.rsplit_once('.').is_some_and(|(_, ext)| ext.eq_ignore_ascii_case(brushlibrary::EXTENSION))
+        || procraft_engine::zip::ZipReader::new(bytes).is_some_and(|zip| brushlibrary::is_library(zip.names()));
+    if library && let Some(read) = read_library(bytes, stem.clone()) {
+        return Some(read);
+    }
     if other {
         return read_other(bytes, stem);
     }
@@ -228,6 +260,7 @@ impl CanvasSession {
                 Some(at as u32)
             }
             ReadBrushes::Text(text) => self.import_brush_file(shown, text),
+            ReadBrushes::Library { name, sets, tools } => self.add_brush_library(name, sets, tools),
         }
     }
 }
@@ -242,6 +275,16 @@ pub struct BrushesRead(std::sync::Mutex<Option<ReadBrushes>>);
 #[uniffi::export]
 pub fn read_brushes(bytes: Vec<u8>, file_name: Option<String>) -> Option<std::sync::Arc<BrushesRead>> {
     read_any_brushes(&bytes, file_name).map(|read| std::sync::Arc::new(BrushesRead(std::sync::Mutex::new(Some(read)))))
+}
+
+#[uniffi::export]
+impl BrushesRead {
+    /// Whether they are a library of their own: added, it is brought into use, which reads and
+    /// writes its files (best off the interface's thread). False once added.
+    pub fn is_library(&self) -> bool {
+        let read = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        matches!(*read, Some(ReadBrushes::Library { .. }))
+    }
 }
 
 #[uniffi::export]
@@ -303,6 +346,51 @@ impl CanvasSession {
         let seed =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
         Some(brushfile::write_set(&name, &list, |i| folder_id(seed, i)))
+    }
+}
+
+#[uniffi::export]
+impl CanvasSession {
+    /// The library in use as a library file: its sets and their brushes in order, each tool's
+    /// brush; none if it has no brushes.
+    pub fn brush_library_as_file(&self) -> Option<Vec<u8>> {
+        let (sets, tools) = {
+            let st = self.shared.lock();
+            let sets: Vec<(String, u32, Vec<Brush>)> = st
+                .library
+                .iter()
+                .enumerate()
+                .map(|(s, set)| {
+                    let brushes = set.brushes.iter().enumerate().map(|(i, b)| st.with_sliders(b, s, i)).collect();
+                    (set.name.clone(), set.icon, brushes)
+                })
+                .collect();
+            let tools = [crate::ToolKind::Paint, crate::ToolKind::Smudge, crate::ToolKind::Erase]
+                .map(|tool| Some(st.brush_ref(tool)));
+            (sets, tools)
+        };
+        if sets.iter().all(|(_, _, brushes)| brushes.is_empty()) {
+            return None;
+        }
+        let made: Vec<Vec<Made>> = sets
+            .iter()
+            .enumerate()
+            .map(|(s, (_, _, brushes))| {
+                brushes.iter().enumerate().map(|(i, b)| self.brush_pictures(b, s as u32, i as u32)).collect()
+            })
+            .collect();
+        let out: Vec<brushlibrary::SetOut<'_>> = sets
+            .iter()
+            .zip(&made)
+            .map(|((name, icon, brushes), made)| brushlibrary::SetOut {
+                name,
+                icon: crate::brush_library::shipped_icon_name(*icon),
+                brushes: brushes.iter().zip(made).map(|(b, m)| (b, author_name(b), m.pictures())).collect(),
+            })
+            .collect();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        let seed = now.as_nanos() as u64;
+        Some(brushlibrary::write(&out, tools, |i| folder_id(seed, i).replace('-', "").to_lowercase(), now.as_secs()))
     }
 }
 
@@ -444,7 +532,7 @@ fn csp_brush(c: &procraft_engine::csp::CspBrush) -> Brush {
         b.hardness = h.clamp(0.0, 1.0);
     }
     if let Some(r) = c.roundness {
-        b.shape.roundness = r.clamp(0.01, 1.0);
+        b.shape.roundness = r.clamp(LEAST_ROUNDNESS, 1.0);
     }
     if let Some(spacing) = c.spacing {
         b.spacing = Brush::spacing_within_reach(spacing);
@@ -851,8 +939,10 @@ fn abr_brush(a: &procraft_engine::abr::AbrBrush) -> Brush {
             b
         }
     };
+    // no thinner than the app's least (its stamps are drawn no thinner), so that it is the
+    // same read back from our own file
     if let Some(r) = a.roundness {
-        b.shape.roundness = r.clamp(0.01, 1.0);
+        b.shape.roundness = r.clamp(LEAST_ROUNDNESS, 1.0);
     }
     if let Some(spacing) = a.spacing {
         // half a pixel less, as a share of the tip's diameter: a small tip's stamps come closer,
@@ -944,7 +1034,7 @@ fn generated_brush(g: &procraft_engine::gbr::Generated) -> Brush {
             let mut b = Brush { name: g.name.clone(), ..Brush::round_pen() };
             // ours paints half halfway between its hardness and its edge: where GIMP's does
             b.hardness = (2.0 * procraft_engine::gbr::generated_half(g.hardness) - 1.0).clamp(0.0, 1.0);
-            b.shape.roundness = (1.0 / g.aspect).clamp(0.01, 1.0);
+            b.shape.roundness = (1.0 / g.aspect).clamp(LEAST_ROUNDNESS, 1.0);
             b
         }
     };
@@ -995,7 +1085,7 @@ fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
     }
     if let KritaTip::Round { hardness, roundness } = k.tip {
         b.hardness = hardness.clamp(0.0, 1.0);
-        b.shape.roundness = roundness.clamp(0.05, 1.0);
+        b.shape.roundness = roundness.clamp(LEAST_ROUNDNESS, 1.0);
     }
     if let Some(spacing) = k.spacing {
         b.spacing = Brush::spacing_within_reach(spacing);
@@ -1057,7 +1147,15 @@ fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
         }
         None => b.pressure_size = 0.0,
     }
-    krita_paint(&mut b, k.opacity, k.flow, k.opacity_pressure.as_deref(), k.flow_pressure.as_deref(), k.wash);
+    // Krita multiplies a texture into each stamp at its strength (unless its texturing is soft):
+    // that strength, as far as the pressure takes it, is less paint laid, the texture as strong
+    let (flow, flow_pressure) = match &k.texture {
+        Some(t) if t.mode == 0 && !t.soft => {
+            (k.flow * t.strength, multiplied(k.flow_pressure.as_deref(), t.strength_pressure.as_deref()))
+        }
+        _ => (k.flow, k.flow_pressure.clone()),
+    };
+    krita_paint(&mut b, k.opacity, flow, k.opacity_pressure.as_deref(), flow_pressure.as_deref(), k.wash);
     if let Some(t) = &k.texture {
         krita_paper(&mut b, t, &k.name);
     }
@@ -1083,8 +1181,13 @@ fn krita_brush(k: &procraft_engine::krita::KritaBrush) -> Brush {
 
 /// Gives `b` a Krita preset's texture as its grain: the mask Krita makes of its picture (light
 /// keeping the paint where it multiplies), as deep as its strength, combined with each stamp by
-/// the nearest of the modes to Krita's.
+/// the nearest of the modes to Krita's. Multiplied its own way (not soft), the grain is whole and
+/// the strength is in the paint laid ([`krita_brush`]); subtracted its own way with a strength
+/// that follows the pressure, each stamp less the mask and less what its strength falls short of,
+/// as our height mode takes the mask from a stamp at a twelfth of the depth there; soft, the
+/// strength is how deep the mask goes. A strength that follows the pressure goes stamp by stamp.
 fn krita_paper(b: &mut Brush, t: &procraft_engine::krita::KritaTexture, name: &str) {
+    use procraft_engine::brush::{GRAIN_HEIGHT, PressureCurve};
     use procraft_engine::krita::KritaPicture;
     let mask = |grey: f32, alpha: f32| (t.mask_value(grey / 255.0, alpha / 255.0) * 255.0).round() as u8;
     let picture = match &t.picture {
@@ -1120,6 +1223,41 @@ fn krita_paper(b: &mut Brush, t: &procraft_engine::krita::KritaTexture, name: &s
         procraft_engine::document::BlendMode::Multiply.id()
     });
     b.set_setting("grain_blend", mode as f32);
+    let pressed = t.strength_pressure.as_deref().map(Curve::new);
+    let by_stamp = match (t.mode, t.soft) {
+        (0, false) => {
+            b.grain.depth = 1.0;
+            false
+        }
+        (1, false) if pressed.is_some() => {
+            b.grain.depth = t.strength / 12.0;
+            b.set_setting("grain_blend", GRAIN_HEIGHT as f32);
+            true
+        }
+        (0 | 1, true) => pressed.is_some(),
+        _ => false,
+    };
+    if by_stamp {
+        b.set_setting("grain_each_stamp", 1.0);
+        b.pressure_curves.set(PressureCurve::GrainDepth, pressed);
+    }
+}
+
+/// Two pressure curves (points 0..1 from the left) multiplied across, at 17 places; either alone
+/// as it is; none for neither.
+fn multiplied(
+    a: Option<&[procraft_engine::geom::Vec2]>,
+    b: Option<&[procraft_engine::geom::Vec2]>,
+) -> Option<Vec<procraft_engine::geom::Vec2>> {
+    use procraft_engine::geom::Vec2;
+    match (a, b) {
+        (None, None) => None,
+        (Some(one), None) | (None, Some(one)) => Some(one.to_vec()),
+        (Some(a), Some(b)) => {
+            let (a, b) = (Curve::new(a), Curve::new(b));
+            Some((0..=16).map(|i| i as f32 / 16.0).map(|x| Vec2::new(x, a.eval(x) * b.eval(x))).collect())
+        }
+    }
 }
 
 /// The curve that, eased as a stamp's opacity is (to the power
@@ -1174,15 +1312,7 @@ fn krita_paint(
     if !wash {
         b.flow = opacity * flow;
         // both curves at once, multiplied across
-        let laid: Option<Vec<Vec2>> = match (opacity_pressure, flow_pressure) {
-            (None, None) => None,
-            (Some(one), None) | (None, Some(one)) => Some(one.to_vec()),
-            (Some(o), Some(f)) => {
-                let (o, f) = (Curve::new(o), Curve::new(f));
-                Some((0..=16).map(|i| i as f32 / 16.0).map(|x| Vec2::new(x, o.eval(x) * f.eval(x))).collect())
-            }
-        };
-        if let Some(points) = laid {
+        if let Some(points) = multiplied(opacity_pressure, flow_pressure) {
             b.pressure_opacity = 1.0;
             b.opacity_curve = rooted(&points);
         }
@@ -1393,31 +1523,83 @@ pub(crate) fn shape_for(t: &Texture) -> (Option<u32>, Option<Source>, Option<f32
             }
         },
         Texture::Stock { name, inverted } => {
+            // a tip printed in dots: ours dotted on the same lattice, each dot as big as the stock
+            // tip's ink there
+            if let Some(lattice) = halftone_lattice(name)
+                && let (Some(rows), Some(cols), Some(tones)) = (
+                    textures::stock_shape_rows(name, *inverted),
+                    textures::stock_shape_cols(name, *inverted),
+                    textures::stock_shape_tones(name, *inverted),
+                )
+            {
+                let cover = tones.iter().map(|&t| f32::from(t)).sum::<f32>() / (tones.len().max(1) as f32 * 255.0);
+                let dots = Source::new(textures::halftone_shape(lattice, &rows, &cols, cover));
+                return (Some(shape::STOCK_DOTS), dots, None);
+            }
             let (image, source, hardness) = stock_stand_in(name, *inverted);
             // our shape with the stock one's own lights and darks and its rows' share of the ink,
-            // where they were measured
-            let retoned =
-                image.filter(|_| source.is_none()).zip(textures::stock_shape_tones(name)).and_then(|(i, tones)| {
-                    let shape = textures::shapes().into_iter().nth(i as usize)?;
-                    // its streaks and gaps across the stroke first, where they were measured
-                    let striped = textures::stock_shape_rows(name).map(|rows| textures::striped(&shape.pixels, &rows));
-                    let pixels = striped.as_deref().unwrap_or(&shape.pixels);
-                    let mut pixels = textures::retoned_shape(pixels, &tones, &textures::SHAPE_TONE_SHARES);
-                    if *inverted {
-                        pixels.iter_mut().for_each(|v| *v = 255 - *v);
+            // where they were measured: all of the stock one as its brush shows it (inverted, for
+            // one that inverts it: most stock tips are drawn dark on white), our shape as it is
+            let retoned = image
+                .filter(|_| source.is_none())
+                .zip(textures::stock_shape_tones(name, *inverted))
+                .and_then(|(i, tones)| {
+                    let mut shape = textures::shapes().into_iter().nth(i as usize)?;
+                    // as wide and tall as the real tip, where it lies in its square (the grainy
+                    // square, standing in for a tip we know nothing else of, takes its outline
+                    // across and down below)
+                    if i != shape::STOCK_GRAINY_SQUARE
+                        && let (Some(rows), Some(cols)) =
+                            (textures::stock_shape_rows(name, *inverted), textures::stock_shape_cols(name, *inverted))
+                        && let Some(fitted) = textures::fitted_to_box(&shape.pixels, &rows, &cols)
+                    {
+                        shape.pixels = fitted;
                     }
-                    Source::new(pixels)
+                    // its marks as fine as the real tip's: standing in for a tip we know nothing
+                    // else of, the grainy square (smooth for a solid one); any other shape of ours
+                    // takes them over itself
+                    if let Some(feature) = textures::stock_shape_feature(name) {
+                        let cover =
+                            tones.iter().map(|&t| f32::from(t)).sum::<f32>() / (tones.len().max(1) as f32 * 255.0);
+                        if i == shape::STOCK_GRAINY_SQUARE {
+                            shape.pixels = textures::grainy_square_of(feature, cover);
+                        } else if let Some(marked) = textures::textured_shape(&shape.pixels, feature, cover) {
+                            shape.pixels = marked;
+                        }
+                    }
+                    // its streaks and gaps across the stroke first (and, standing in for a tip we
+                    // know nothing else of, its outline across too)
+                    let rows = textures::stock_shape_rows(name, *inverted);
+                    let cols = textures::stock_shape_cols(name, *inverted).filter(|_| i == shape::STOCK_GRAINY_SQUARE);
+                    let striped = match (rows, cols) {
+                        (Some(rows), Some(cols)) => Some(textures::shaped(&shape.pixels, &rows, &cols)),
+                        (Some(rows), None) => Some(textures::striped(&shape.pixels, &rows)),
+                        _ => None,
+                    };
+                    let pixels = striped.as_deref().unwrap_or(&shape.pixels);
+                    Source::new(textures::retoned_shape(pixels, &tones, &textures::SHAPE_TONE_SHARES))
                 });
             (image, retoned.or(source), hardness)
         }
     }
 }
 
+/// The lattice a stock tip printed in dots has its dots on, as [`textures::halftone_shape`] takes it
+/// (each set of rows as its cycles across and down the image), as measured; none for any other.
+fn halftone_lattice(name: &str) -> Option<[(f32, f32); 2]> {
+    let n = name.to_lowercase();
+    // its dots about 47 to the side, on rows turned 17 degrees and their crossing ones 109
+    n.contains("phoenix_secondary_shape").then_some([(-45.30, -13.85), (14.75, -42.60)])
+}
+
 /// Our stand-in for the stock shape `name`: our nearest shape, or the round tip at a hardness, or
 /// (blank) the whole square.
 fn stock_stand_in(name: &str, inverted: bool) -> (Option<u32>, Option<Source>, Option<f32>) {
     let n = name.to_lowercase();
-    let has = |words: &[&str]| words.iter().any(|w| n.contains(w));
+    let has = |words: &[&str]| words.iter().any(|w| names(&n, w));
+    // the round tip's words as whole words of the name ("shard" is no hard tip, nor "penguin" a pen)
+    let words: Vec<&str> = n.split(|c: char| !c.is_alphanumeric()).collect();
+    let says = |these: &[&str]| these.iter().any(|w| words.contains(w));
     if has(&["blank"]) {
         // a plain image: the stamp's whole square (nothing, inverted)
         let fill = if inverted { 0 } else { 255 };
@@ -1430,7 +1612,7 @@ fn stock_stand_in(name: &str, inverted: bool) -> (Option<u32>, Option<Source>, O
         (Some(shape::SLIM_OVAL), None, None)
     } else if has(&["medium-hard", "medium hard", "mediumhard"]) {
         (None, None, Some(0.75))
-    } else if has(&["hard", "pen", "solid", "round"]) && !has(&["soft", "ink"]) {
+    } else if says(&["hard", "pen", "solid", "round"]) && !has(&["soft", "ink", "rect"]) {
         (None, None, Some(0.95))
     } else if has(&["medium"]) {
         (None, None, Some(0.5))
@@ -1443,14 +1625,42 @@ fn stock_stand_in(name: &str, inverted: bool) -> (Option<u32>, Option<Source>, O
     }
 }
 
+/// Whether the name `n` (lower case) says `word`: a word as the start of one of the name's words, or
+/// (five letters or more) as the end of one, so that "blotch" says blot and "wildgrass" grass but
+/// "fairy" doesn't say air nor "minke" ink; a phrase anywhere in it.
+fn names(n: &str, word: &str) -> bool {
+    if !word.chars().all(|c| c.is_ascii_alphabetic()) {
+        return n.contains(word);
+    }
+    n.split(|c: char| !c.is_alphanumeric()).any(|t| t.starts_with(word) || (word.len() >= 5 && t.ends_with(word)))
+}
+
 /// Our shape nearest a stock shape's name.
 fn stock_shape(n: &str) -> u32 {
+    // a tip named for a brush of its own ("Name_Shape", "Name_Secondary_Shape": a bird, a plant, a
+    // place) says nothing of what it is: the grainy square, taking its measured outline
+    let base = n.rsplit('/').next().unwrap_or(n);
+    let stem = base.rsplit_once('.').map_or(base, |(s, _)| s);
+    if stem.ends_with("_shape") && stem.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+        return shape::STOCK_GRAINY_SQUARE;
+    }
     let table: &[(&[&str], u32)] = &[
+        // drawn things of their own
+        (&["scribble"], shape::SCRIBBLE),
+        (&["lightning", "bolt"], shape::BOLT),
+        (&["flower", "petal", "blossom"], shape::FLOWER),
+        (&["diamond", "crystal"], shape::DIAMOND),
+        (&["reticle"], shape::RING),
+        (&["spike"], shape::STOCK_LINE),
+        (&["tendril", "tentacle"], shape::STOCK_HOOK),
+        (&["pebble", "rocks", "limestone"], shape::STONE),
         (&["square-dots", "square dots", "squaredots"], shape::STOCK_SQUARE_DOTS),
         (&["dots"], shape::STOCK_DOTS),
         (&["brick"], shape::BLOCK),
         (&["spray", "mist", "aero", "speckle"], shape::SPRAY),
-        (&["splat", "flick", "spatter", "drip"], shape::SPLATTER),
+        // a blob with paint running down from it
+        (&["drip"], shape::DRIP),
+        (&["splat", "flick", "spatter"], shape::SPLATTER),
         (&["bristle", "fan", "hair", "fur"], shape::BRISTLES),
         // a flat brush's whole stroke, its bristles' streaks in it
         (&["flat-brush", "flat brush", "flatbrush"], shape::STOCK_FLAT_STROKE),
@@ -1467,14 +1677,17 @@ fn stock_shape(n: &str) -> u32 {
         (&["leaf", "foliage", "tree"], shape::LEAF),
         (&["grass", "reed"], shape::GRASS),
         (&["cloud", "fog", "smoke"], shape::CLOUD),
-        (&["wisp", "wind"], shape::WISP),
+        // one curved calligraphic stroke
+        (&["wind", "hook"], shape::STOCK_HOOK),
+        (&["wisp"], shape::WISP),
         (&["star", "sparkle", "glint", "flare", "twinkle"], shape::SPARKLE),
         (&["ring", "bokeh", "circle", "bubble"], shape::RING),
-        (&["square", "pixel", "block", "box"], shape::SQUARE),
+        (&["square", "pixel", "block", "box", "rect"], shape::SQUARE),
         (&["hatch", "line", "stripe"], shape::HATCH),
         (&["noise", "grain", "grit", "sand", "texture"], shape::STOCK_GRAINY_DISC),
     ];
-    table.iter().find(|(words, _)| words.iter().any(|w| n.contains(w))).map_or(shape::STOCK_GRAINY_DISC, |(_, s)| *s)
+    // one we have no word for: grain filling the square, taking its outline from how its ink lies
+    table.iter().find(|(words, _)| words.iter().any(|w| names(n, w))).map_or(shape::STOCK_GRAINY_SQUARE, |(_, s)| *s)
 }
 
 /// What a brush's own preview (PNG) says of a stock grain we don't have.
@@ -1570,10 +1783,28 @@ pub(crate) fn grain_for(t: &Texture, preview: Option<&[u8]>) -> (Option<u32>, Op
                 _ => Some(grain::MOTTLED),
             };
             let image = named_grain(&n).map_or_else(unknown, Some);
-            // our pattern with the stock grain's own lights and darks, where they were measured
-            let source = image.zip(textures::stock_grain_tones(name)).and_then(|(i, tones)| {
+            // our pattern with the stock grain's own lights and darks, where they were measured;
+            // one drawn to the stock image's proportions as it is drawn (measured smaller, the
+            // stock image's fine lines and dots go grey, which would take the pattern's contrast)
+            let source = image.and_then(|i| {
+                // a paper or a wash: noise as strong at each size as the stock image is, with its
+                // tones (tiled as a share of that image is)
+                if textures::drawn_by_octaves(i)
+                    && let (Some((_, octaves)), Some(tones)) =
+                        (textures::stock_grain_octaves(name), textures::stock_grain_tones(name))
+                {
+                    let mut pixels = textures::octave_grain(&octaves, &tones);
+                    if *inverted {
+                        pixels.iter_mut().for_each(|v| *v = 255 - *v);
+                    }
+                    return Source::new(pixels);
+                }
                 let pattern = textures::grains().into_iter().nth(i as usize)?;
-                let mut pixels = textures::retoned(&pattern.pixels, &tones, &textures::TONE_SHARES);
+                let mut pixels = if textures::drawn_to_stock_size(i) {
+                    pattern.pixels
+                } else {
+                    textures::retoned(&pattern.pixels, &textures::stock_grain_tones(name)?, &textures::TONE_SHARES)
+                };
                 if *inverted {
                     pixels.iter_mut().for_each(|v| *v = 255 - *v);
                 }
@@ -1601,6 +1832,15 @@ pub(crate) fn material_for(t: &Texture) -> (Option<u32>, Option<Source>) {
 /// Our grain nearest to a stock image named `n` (lower case), if its name says what it is.
 fn named_grain(n: &str) -> Option<u32> {
     let table: &[(&[&str], u32)] = &[
+        // patterns named for the brushes that draw them (one of them has "stone" in its name):
+        // ours drawn to the same proportions
+        (&["homestead_grain"], grain::GRAPH_PAPER),
+        (&["ironstone_grain"], grain::DOT_GRID),
+        (&["snow_daisy_grain"], grain::DOTTED_STAR),
+        (&["brush-preset-diagonal"], grain::DIAGONAL_STRIPES),
+        (&["tessellated"], grain::LABYRINTH),
+        (&["brush-preset-grid"], grain::FINE_GRID),
+        (&["dof-dots-light"], grain::SOFT_DOTS),
         (&["recycled"], grain::RECYCLED),
         // a canvas painted on: rough, its weave showing through patches of paint
         (&["canvas"], grain::ROUGH_CANVAS),
@@ -1789,6 +2029,108 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_stock_tip_of_one_curved_stroke_stands_in_as_our_hook() {
+        // swept along a stroke it paints a broad band, as such a tip does; a wisp stays a wisp
+        assert_eq!(stock_shape("wind.png"), shape::STOCK_HOOK);
+        assert_eq!(stock_shape("soft wisp.png"), shape::WISP);
+        assert_eq!(textures::shapes()[shape::STOCK_HOOK as usize].name, "Hook");
+    }
+
+    #[test]
+    fn stock_pattern_grains_take_ours_drawn_to_their_proportions() {
+        assert_eq!(named_grain("library/homestead_grain.png"), Some(grain::GRAPH_PAPER));
+        assert_eq!(named_grain("brush-preset-grid.png"), Some(grain::FINE_GRID));
+        assert_eq!(named_grain("dof-dots-light.png"), Some(grain::SOFT_DOTS));
+        assert_eq!(named_grain("library/ironstone_grain.png"), Some(grain::DOT_GRID));
+        assert_eq!(named_grain("library/snow_daisy_grain.png"), Some(grain::DOTTED_STAR));
+        assert_eq!(named_grain("brush-preset-diagonal.png"), Some(grain::DIAGONAL_STRIPES));
+        assert_eq!(named_grain("tessellated.png"), Some(grain::LABYRINTH));
+        assert_eq!(named_grain("stone_wall.png"), Some(grain::CONCRETE));
+    }
+
+    #[test]
+    fn a_stock_tip_only_older_brushes_name_stands_in_as_faint_as_it_is() {
+        // no brush the other app comes with names this tip (older brushes and people's own still
+        // do): unmeasured, it stood in as our bright chunk, so a dual brush's second drawn with it
+        // built up solid and passed its first through uncut
+        let tip = Texture::Stock { name: "Gouache-Drop-3.jpg".to_owned(), inverted: false };
+        let (_, source, _) = shape_for(&tip);
+        let pixels = source.expect("retoned to its measured tones").pixels;
+        let mean = pixels.iter().map(|&v| f32::from(v)).sum::<f32>() / pixels.len() as f32 / 255.0;
+        assert!(mean < 0.1, "{mean}");
+        // and a dual brush's second's own tip and grain are measured as its first's are
+        assert!(textures::stock_shape_tones("nightjar_secondary_shape.png", false).is_some());
+        assert!(textures::stock_grain_tones("lumita_secondary_grain.png").is_some());
+    }
+
+    #[test]
+    fn a_stock_tip_stands_in_as_wide_as_it_inks() {
+        // a dab inked across 85% of its square and down 70% (ours, a chunk, had 68% and 66%): its
+        // stroke came out a fifth too narrow
+        let tip = Texture::Stock { name: "Acrylic-Dab-3.jpg".to_owned(), inverted: false };
+        let (_, source, _) = shape_for(&tip);
+        let pixels = source.expect("retoned").pixels;
+        let n = TEXTURE_SIZE;
+        let span = |across: bool| {
+            let inked =
+                |i: usize| (0..n).filter(|&j| pixels[if across { j * n + i } else { i * n + j }] > 13).count() > n / 50;
+            let first = (0..n).find(|&i| inked(i)).unwrap_or(0);
+            let last = (0..n).rev().find(|&i| inked(i)).unwrap_or(0);
+            (last - first) as f32 / n as f32
+        };
+        assert!(span(true) > 0.74, "{}", span(true));
+        assert!((0.62..0.76).contains(&span(false)), "{}", span(false));
+    }
+
+    #[test]
+    fn a_stock_tip_printed_in_dots_stands_in_as_dots_on_its_lattice() {
+        let tip = Texture::Stock { name: "Phoenix_Secondary_Shape.png".to_owned(), inverted: true };
+        let (image, source, _) = shape_for(&tip);
+        assert_eq!(image, Some(shape::STOCK_DOTS));
+        let pixels = source.expect("dots drawn").pixels;
+        let n = TEXTURE_SIZE;
+        let a: Vec<f32> = pixels.iter().map(|&v| f32::from(v) / 255.0).collect();
+        // as much ink as the stock tip inverted holds (about a sixth), most of it on its right
+        let mean = a.iter().sum::<f32>() / a.len() as f32;
+        assert!((0.1..0.25).contains(&mean), "{mean}");
+        let half = |right: bool| {
+            (0..n * n).filter(|k| (k % n >= n / 2) == right).map(|k| a[k]).sum::<f32>() / (n * n / 2) as f32
+        };
+        assert!(half(true) > 2.0 * half(false), "{} {}", half(true), half(false));
+        // the dots repeat along the lattice's rows: shifted by one step of it, the inky middle of the
+        // tip matches itself far better than shifted half a step
+        let [(ax, ay), (bx, by)] = halftone_lattice("phoenix_secondary_shape.png").unwrap();
+        let det = ax * by - ay * bx;
+        // one step of the lattice, a row of the first set across, along a row of the second
+        let step = (by / det * n as f32, -bx / det * n as f32);
+        let differ = |k: f32| {
+            let (dx, dy) = ((step.0 * k).round() as i32, (step.1 * k).round() as i32);
+            let mut sum = 0.0;
+            for y in 96..160i32 {
+                for x in 150..214i32 {
+                    let at = |x: i32, y: i32| a[(y as usize) * n + x as usize];
+                    sum += (at(x, y) - at(x + dx, y + dy)).abs();
+                }
+            }
+            sum
+        };
+        assert!(differ(1.0) < 0.5 * differ(0.5), "{} {}", differ(1.0), differ(0.5));
+    }
+
+    #[test]
+    fn a_stock_tip_named_for_a_brush_of_its_own_takes_its_outline_whatever_its_name_says() {
+        // a bird's or a place's name says nothing of the tip ("ringtail" isn't a ring, nor
+        // "starling" a star); a plain word does
+        assert_eq!(stock_shape("ringtail_shape.png"), shape::STOCK_GRAINY_SQUARE);
+        assert_eq!(stock_shape("folder/starling_secondary_shape.png"), shape::STOCK_GRAINY_SQUARE);
+        assert_eq!(stock_shape("brush-preset-scribble.jpg"), shape::SCRIBBLE);
+        assert_eq!(stock_shape("brush-preset-spike.png"), shape::STOCK_LINE);
+        assert_eq!(stock_shape("brush-artery-drip-2.jpg"), shape::DRIP);
+        assert_eq!(stock_shape("brush-artery-cloud-shape.jpg"), shape::CLOUD);
+        assert_eq!(textures::shapes()[shape::STOCK_LINE as usize].name, "Line");
+    }
+
+    #[test]
     fn a_small_tip_is_drawn_up_smoothly_and_a_large_one_down_by_its_average() {
         use procraft_engine::abr::AbrTip;
         // two pixels side by side, black and white: drawn up, grey between them, not two blocks
@@ -1823,6 +2165,8 @@ mod tests {
             picture: KritaPicture::Encoded(crate::project::rgba_png(16, 16, &dots)),
             scale: 1.0,
             strength: 1.0,
+            strength_pressure: None,
+            soft: false,
             invert: false,
             mode: 1,
             brightness: 0.0,
@@ -1870,7 +2214,88 @@ mod tests {
             brush(KritaTexture { mode: 0, ..texture.clone() }).setting("grain_blend"),
             BlendMode::Multiply.id() as f32
         );
-        assert_eq!(brush(KritaTexture { mode: 2, ..texture }).setting("grain_blend"), BlendMode::Multiply.id() as f32);
+        assert_eq!(
+            brush(KritaTexture { mode: 2, ..texture.clone() }).setting("grain_blend"),
+            BlendMode::Multiply.id() as f32
+        );
+        // laid over the whole stroke, at its strength, while that doesn't follow the pressure
+        let still = brush(KritaTexture { strength: 0.8, ..texture.clone() });
+        assert!(!still.grain_each_stamp() && (still.grain.depth - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_krita_texture_s_strength_follows_the_pressure_as_krita_takes_it() {
+        use procraft_engine::brush::{GRAIN_HEIGHT, PressureCurve};
+        use procraft_engine::document::BlendMode;
+        use procraft_engine::geom::Vec2;
+        use procraft_engine::krita::{KritaBrush, KritaPicture, KritaTexture, KritaTip};
+        let near = |a: f32, b: f32| (a - b).abs() < 2e-3;
+        let dots: Vec<u8> = (0..16 * 16).flat_map(|i| [0, 0, 0, if i % 4 == 0 { 255 } else { 0 }]).collect();
+        let pressed = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)];
+        let texture = KritaTexture {
+            picture: KritaPicture::Encoded(crate::project::rgba_png(16, 16, &dots)),
+            scale: 1.0,
+            strength: 0.9,
+            strength_pressure: Some(pressed.clone()),
+            soft: false,
+            invert: false,
+            mode: 1,
+            brightness: 0.0,
+            contrast: 1.0,
+            neutral: 0.5,
+            cutoff: (0, 0.0, 1.0),
+        };
+        let brush = |texture: KritaTexture| {
+            krita_brush(&KritaBrush {
+                name: "Pencil".into(),
+                tip: KritaTip::Round { hardness: 1.0, roundness: 1.0 },
+                spacing: None,
+                angle: 0.0,
+                follows: false,
+                turns_at_random: false,
+                rotation_random: 0.0,
+                rotation_per_stroke: false,
+                follows_tilt: false,
+                mirror: (false, false),
+                scatter: None,
+                color_random: [0.0; 4],
+                color_per_stroke: [0.0; 4],
+                ratio_random: 0.0,
+                ratio_pressure: None,
+                mix_pressure: None,
+                size_pressure: None,
+                opacity_pressure: None,
+                flow_pressure: None,
+                opacity: 1.0,
+                flow: 0.5,
+                wash: false,
+                texture: Some(texture),
+                missing: Vec::new(),
+                masking: None,
+            })
+        };
+        // subtracted (Krita's own way): stamp by stamp, a height a twelfth as deep as the strength,
+        // its depth by the pressure
+        let b = brush(texture.clone());
+        assert!(b.grain_each_stamp());
+        assert_eq!(b.setting("grain_blend"), GRAIN_HEIGHT as f32);
+        assert!(near(b.grain.depth, 0.9 / 12.0));
+        assert!(b.pressure_curves.get(PressureCurve::GrainDepth).is_some_and(|c| near(c.eval(0.5), 0.5)));
+        // multiplied: the grain whole, over the whole stroke, the strength less paint laid
+        let multiplied = brush(KritaTexture { mode: 0, ..texture.clone() });
+        assert!(!multiplied.grain_each_stamp() && near(multiplied.grain.depth, 1.0));
+        assert_eq!(multiplied.setting("grain_blend"), BlendMode::Multiply.id() as f32);
+        let plain = brush(KritaTexture { mode: 0, strength: 1.0, strength_pressure: None, ..texture.clone() });
+        assert!(near(multiplied.flow.powf(0.4), (plain.flow.powf(0.4) * 0.9).min(1.0)) || multiplied.flow < plain.flow);
+        assert!(multiplied.pressure_opacity > 0.0 && plain.pressure_opacity == 0.0);
+        // soft: as deep as the strength, stamp by stamp by the pressure, in its own mode
+        let soft = brush(KritaTexture { soft: true, ..texture.clone() });
+        assert!(soft.grain_each_stamp() && near(soft.grain.depth, 0.9));
+        assert_eq!(soft.setting("grain_blend"), BlendMode::Subtract.id() as f32);
+        // a strength that doesn't follow the pressure: over the whole stroke, as before
+        let still = brush(KritaTexture { strength_pressure: None, ..texture });
+        assert!(!still.grain_each_stamp() && near(still.grain.depth, 0.9));
+        assert_eq!(still.setting("grain_blend"), BlendMode::Subtract.id() as f32);
     }
 
     #[test]
@@ -2466,6 +2891,10 @@ mod tests {
             },
         };
         let b = abr_brush(&round);
+        // a tip flatter than the app's least comes in at the least, as it is read back from our
+        // own file
+        let flat = abr_brush(&AbrBrush { roundness: Some(0.04), ..round.clone() });
+        assert_eq!(flat.shape.roundness, LEAST_ROUNDNESS);
         // most size 33% (as the file keeps it), the least 1%
         assert_eq!(
             ((b.max_size / b.size_unit() * 100.0).round(), (b.min_size / b.size_unit() * 100.0).round()),
