@@ -1,6 +1,6 @@
 # ProCraft → HarmonyOS：进度记录
 
-（2026-11-12 15:30 更新。恢复时先读这份；两份审计报告在 `reports/`。）
+（2026-11-14 14:35 更新。恢复时先读这份；两份审计报告在 `reports/`。）
 
 ## 一句话状态
 
@@ -13,17 +13,18 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `862afb0`（稳定分支，比上游 `a4af325` 领先 20 个提交）
-  - `experimental/harmony-performance` = `6356b2b`（在 main 之上，+197/−15，性能）
+  - `main` = `9d40ff4`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
+  - `experimental/harmony-performance` = `82e57ed`（在 main 之上，性能 + 画笔纹理并行）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
-- 上游 `upstream/main` = `a4af325`，已合并进 `main`，零冲突
+- 上游 `upstream/main` = `c330afd`（v0.0.6-beta），已合并进 `main`；两处冲突（`.gitignore`、`ui.rs` 的 `shortcuts`）都已手工解决，另修了三处上游改结构导致的不一致（`colour_models` 移入 `crates/core`、`stroke_sound`/`touch_keyboard` 模块、`export_plugin` 改走 `platform::pick`、`Action::PluginExport` 在 `app.rs` 补 arm）
 
 ## 交付物
 
 `output/procraft-harmony-signed.hap`（43938254 B, md5 `7ba063f8…`）
 `output/procraft-harmony-unsigned.hap`（43534103 B, md5 `f15749a0…`）
-均为 `0.0.5-beta` / versionCode 501 / minAPIVersion 50004016（API 16）/ targetAPI 60000020。
+均已更新为合并上游后的构建（`0.0.5-beta` / minAPIVersion 50004016 / targetAPI 6.1.1(24)）。
+CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP + SHA256SUMS。
 
 ## 已完成并验证（HUAWEI MatePad 11.5''S，HarmonyOS 6.1.0 / API 24，2800×1840）
 
@@ -101,8 +102,9 @@
    只改 `module.json5` 不生效。当前读剪贴板被 pasteboard_service 明确拒绝。写剪贴板不需要权限，可用。
 2. **剪贴板写图片** 的链路已实现并有编译保证，但上游界面本身没有任何地方发出
    `egui::OutputCommand::CopyImage`（只有消费者、没有生产者），所以界面上点不到。这是上游行为。
-3. **bundle 名** 暂时是 `io.github.otd.harmonyTest`（签名 profile 绑定），换成自己的调试证书后
-   可改回 `io.github.artcraftandroid.procraft`。
+3. **bundle 名**：仓库里是 `io.github.artcraftandroid.procraft`（应用自己的名字）。本机签名
+   profile 绑的是旧的调试名 `io.github.otd.harmonyTest`，所以本地装机验证要用
+   `/root/otd-keys/test-build.sh`（只在构建期替换包名、结束还原，不入库）。
 4. 手写笔压感/倾斜已接入笔刷引擎，但未在真机手写笔上做压感曲线标定。
 5. 笔刷名与作品名不翻译（是用户内容）。
 6. 空闲 60 fps 锁帧可能是 HarmonyOS 自身行为（用户提示）。
