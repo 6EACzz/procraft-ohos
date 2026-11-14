@@ -13,7 +13,7 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `8f229dc`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
+  - `main` = `f60a4e3`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
   - `experimental/harmony-performance` = `bf6259d`（在 main 之上，性能 + 画笔纹理并行）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
@@ -106,6 +106,17 @@ CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP +
 - **深浅跟随系统**：`'environment'` 监听 + `setColorMode` + `setDecorButtonStyle`；因为
   `setColorMode` 自身触发配置变更，必须记住 `this.told`，否则会 13ms 一次无限循环（曾实测）
 - 浮动窗口在深色系统下标题栏已变深色（`wm1.jpeg`），全屏启动恢复（`wm2/wm5.jpeg`）
+- **触摸采样**（`8eb53a8`）：`OnTouch` 每帧额外调 `OH_NativeXComponent_GetHistoricalPoints`，
+  把被系统合并掉的点连同各自的 `timeStamp` 逐个经 `procraft_touch_gathered` 交给
+  `pen.rs` 的按指针队列，`input.rs::sample()` 用 `time_ms = now - age_ms` 排空。
+  实测每帧多 1–3 个点（60 Hz 帧上跑 120–240 Hz 采样）。**只搬坐标不搬时间戳无效**：
+  引擎用相邻样本时间差决定插几步（`stroke.rs` 的 `BATCHED_MS = 0.5` / `share_batch()`）
+- **面板拖动滚动**（`8eb53a8`）：`ohos_input.rs` 原先只推指针事件、从不推 `egui::Event::Touch`，
+  于是 `has_touch_screen()` 恒 false，而 `ScrollArea` 的 `ScrollSource{drag: OnTouch}` 正是问它——
+  全部 34 个 `ScrollArea` 在无滚轮的平板上都滑不动。现在每个触摸两样都推（鼠标合成的
+  `MOUSE_ID = 0xFFFF` 除外）。顺带修好 `long_touched()`、捏合、Studio 笔垫
+- **面板高度 clamp**（`8eb53a8`）：`quick_menu` 取词面板与新建画布面板原本无纵向 clamp，
+  比窗口高就画到屏幕外。现在按 `panel::most_height()` 收紧，列表再高也可滚动到达
 
 ## 已知限制（不是 bug，或需要签名配置）
 
