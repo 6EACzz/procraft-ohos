@@ -115,6 +115,10 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
     平台号与 API 号必须成对（hvigor 用 `hos-config.json` 的 `osVersionMapper` 校验，
     16 对应 `5.0.4`，不是 `5.0.1`），打包出来的 `minAPIVersion` 也就从 50000012 变成 50004016。
 
+    `targetSdkVersion` 同理要写清楚：现在写的是 `6.1.1(24)`，即 **API 24**，也就是这个移植
+    实际构建和测试过的 API。写更高的值等于承诺应用已经消化了新版本对它的行为改动，而这里
+    并没有验证过——设备升到更高 API 也不应该自动抬高这个数字。
+
 ---
 
 ## 目录
