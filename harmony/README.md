@@ -145,6 +145,42 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
     并再发一次——所以 `applyColorMode()` 记住上次告诉过窗口的模式（`this.told`），否则
     会以 **13 毫秒一次**的频率无限循环下去（这正是最初的样子）。
 
+20. **一帧里的触摸点不止一个：`GetTouchEvent` 只给你最后一个。**
+    手写笔采样率远高于屏幕刷新率（头文件里写的是"最快 1 ms 一次"），系统把一帧内收到的
+    点**合并**成一次事件上报，只保留最新那个。快速画曲线时于是每帧只有一个坐标，线条在
+    帧与帧之间就是几段直线——这正是"线条不连贯"的成因，不是笔刷引擎的问题。
+
+    原始点是可以要回来的：`OH_NativeXComponent_GetHistoricalPoints()` 返回这一帧里被合并掉
+    的所有点，每个带自己的 `timeStamp`（纳秒）、`force`、`titlX`/`titlY`（SDK 里就是这么拼的）
+    和 `sourceTool`。现在 `OnTouch` 把它们逐个经 `procraft_touch_gathered` 交出去，附带
+    `age_ms`（相对这次触摸的早晚），`pen.rs` 按指针排队，`input.rs` 的 `sample()` 把队列
+    排空后每点用 `time_ms = now - age_ms` 交给引擎。
+
+    **时间戳必须逐点带上，只搬坐标是没用的。** `crates/engine/src/stroke.rs` 用相邻样本的
+    时间差决定这一步插几个中间点（`BATCHED_MS = 0.5` 以内视为同一批，只走一步，见
+    `share_batch()`）；如果一帧的点共用同一个 `time_ms`，引擎会把它们当"一批"处理，
+    等于什么也没改善。实测每帧多拿到 1–3 个点。
+
+    另外注意 `OH_NativeXComponent_TouchEvent_SourceTool` 和
+    `OH_NativeXComponent_TouchPointToolType` 是**两个不同的枚举**，历史点只有前者，
+    拿它去问后者的函数编译不过。
+
+21. **"这是触摸屏"这件事，egui 只从 `Event::Touch` 得知。**
+    `ohos_input.rs` 最初把每个触摸转成 `PointerMoved` + `PointerButton` + `PointerGone`
+    （指针那半边），却从没推过 `egui::Event::Touch`。点击因此一切正常，但
+    `Context::has_touch_screen()` 一直返回 false——而它正是 `ScrollArea` 的
+    `ScrollSource { drag: OnTouch }` 的判据。结果就是**全部 34 个 `ScrollArea` 都不能用
+    手指拖动滚动**，而平板没有滚轮，于是任何超出窗口高度的面板都滑不动。
+    顺带失效的还有 `Response::long_touched()`、`multi_touch()` 的捏合，以及 Studio 的笔垫。
+
+    所以每个触摸要**两样都推**：先 `Event::Touch`（`device_id` 用固定的 `TouchDeviceId(0)`，
+    让所有手指共用一个触摸状态），再推指针事件。鼠标合成出来的触摸（`MOUSE_ID = 0xFFFF`）
+    不推，鼠标的拖动不该被当成触摸屏的拖动。
+
+    还有一半是布局：`quick_menu` 的取词面板和新建画布面板原本**没有纵向clamp**，
+    比窗口高时会被画到屏幕外，那部分连滚动都够不着。现在都按窗口剩余高度收紧
+    （`panel::most_height()`），列表再高也是滚动可达的。
+
 ---
 
 ## 目录
@@ -205,6 +241,10 @@ cd harmony
 - **软键盘**在点画布标题、图层重命名等文本框时拉起，输入法组字正常
 - **导出**保存到用户目录后可被系统选择器看到（`Untitled Artwork.png`，48 KB）
 - **调色板名称与颜色名**中文（基础 / 大地，以及 灰红 / 深红 / 淡红 这类 73 个色名）
+- **面板纵向滚动**：笔刷库左右两列、Actions 各分页、快捷菜单在手指拖动下都能滚动，
+  面板高度按窗口剩余空间收紧，不会再有"画到屏幕外、滑不到"的部分
+- **触摸采样**：每帧从 `GetHistoricalPoints` 额外拿到 1–3 个点（120–240 Hz 的笔迹在
+  60 Hz 的帧上），带各自的时间戳交给笔刷引擎
 
 ---
 
