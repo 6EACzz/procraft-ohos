@@ -57,6 +57,10 @@ void procraft_resized(uint32_t width, uint32_t height);
 // The page's density (its vp to its pixels).
 void procraft_scale(float pixels_per_point);
 
+// The panel's refresh rate, in Hz: the pace the app draws its frames at, since a frame a refresh at
+// 120 Hz is twice the frames a second that 60 is. Nought (never sent) means 60.
+void procraft_frame_rate(uint32_t hertz);
+
 // The app's window has focus, or hasn't.
 void procraft_focused(bool focused);
 

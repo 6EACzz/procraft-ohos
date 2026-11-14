@@ -14,7 +14,7 @@
 
 use std::ffi::c_void;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -210,8 +210,11 @@ impl Host for TabletHost {
     }
 
     fn frame_gap(&self) -> Duration {
-        // a tablet's display refreshes at 60, 90 or 120 Hz; a frame is paced at 60 at least
-        Duration::from_millis(16)
+        // the panel's own refresh, as the page reports it (see `procraft_frame_rate`): a tablet's
+        // display is 60, 90, 120 or 144 Hz, and pacing every frame at 60 leaves the faster ones
+        // drawing one frame in three
+        let hertz = FRAME_HERTZ.load(Ordering::Relaxed);
+        Duration::from_secs_f64(1.0 / f64::from(if hertz == 0 { 60 } else { hertz }))
     }
 
     fn minimised(&self) -> bool {
@@ -298,6 +301,10 @@ const KEYCODE_BACK: u32 = 2;
 /// page asks when BACK is pressed (`procraft_can_go_back`). Kept by the app's own thread each
 /// pass, so that the shell's thread reads it without having to ask the app and wait for it.
 static BACK_HERE: AtomicBool = AtomicBool::new(false);
+
+/// The panel's refresh rate, in Hz, as the page reads it from the system (`procraft_frame_rate`):
+/// nought until the page has said, which the frame's pace takes as the 60 a display ends at.
+static FRAME_HERTZ: AtomicU32 = AtomicU32::new(0);
 
 /// The app's own thread's mailbox, and the way to wake it.
 static SAID: Mutex<Option<std::sync::mpsc::Sender<Said>>> = Mutex::new(None);
@@ -938,6 +945,16 @@ pub extern "C" fn procraft_resized(width: u32, height: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn procraft_scale(pixels_per_point: f32) {
     tell(Said::Scale { pixels_per_point });
+}
+
+/// The panel's refresh rate, in Hz, as the page read it from the system: the frame's pace is one
+/// frame a refresh, so a tablet drawing at 120 Hz is not made to wait for a 60 Hz one. Nought
+/// means the page could not tell, and the pace stays at 60.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_frame_rate(hertz: u32) {
+    if hertz > 0 && hertz <= 1000 {
+        FRAME_HERTZ.store(hertz, Ordering::Relaxed);
+    }
 }
 
 /// The app went to the background, or came back.

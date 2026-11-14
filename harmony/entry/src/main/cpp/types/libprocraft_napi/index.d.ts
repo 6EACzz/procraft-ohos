@@ -3,6 +3,7 @@
 
 export const setOwnFolder: (dir: string) => void;
 export const setScale: (scale: number) => void;
+export const setFrameRate: (hertz: number) => void;
 export const resized: (width: number, height: number) => void;
 export const focused: (focused: boolean) => void;
 export const key: (code: number, text: number, pressed: boolean, repeat: boolean) => void;

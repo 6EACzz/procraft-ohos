@@ -10,6 +10,7 @@ import { image } from '@kit.ImageKit';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import hilog from '@ohos.hilog';
+import display from '@ohos.display';
 import procraft from 'libprocraft.so';
 
 const TAG: string = 'ProCraft';
@@ -79,8 +80,28 @@ struct Index {
     // the app's own files go in this app's sandbox, which only this side can name: told as early
     // as it can be (a save may come before the surface does)
     this.tellOwnFolder();
+    // the panel's refresh, so that the app draws at the rate the screen can show, and so that the
+    // surface asks the system for it (a panel nothing asks of settles at 60 Hz, whatever it can do)
+    this.tellFrameRate();
     // the app's asks are taken as they come (it runs on its own thread, drawing by itself)
     this.pumpTimer = setInterval(() => this.pump(), 16);
+  }
+
+  // The panel's refresh rate, and what the surface asks the system for. The display's own
+  // `refreshRate` is the rate it is running at now, which is the one the app should pace itself
+  // at: asking for the panel's maximum would make the app wait on frames nothing needs, and would
+  // not lift the panel off the rate it had settled on either (the system takes the range as a
+  // request, not a setting).
+  private tellFrameRate(): void {
+    try {
+      const hertz: number = display.getDefaultDisplaySync().refreshRate;
+      if (hertz !== undefined && hertz > 0) {
+        procraft.setFrameRate(Math.round(hertz));
+        hilog.info(0x3200, TAG, 'the panel refreshes at %{public}d Hz', Math.round(hertz));
+      }
+    } catch (error) {
+      hilog.warn(0x3200, TAG, 'the refresh rate: %{public}s', JSON.stringify(error));
+    }
   }
 
   // Where the app keeps its own files: this app's sandbox, which nothing under $HOME is.

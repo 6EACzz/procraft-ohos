@@ -27,6 +27,14 @@
         "label": "$string:EntryAbility_label",
         "startWindowIcon": "$media:startIcon",
         "startWindowBackground": "$color:start_window_background",
+        // The app is a canvas: it asks for the whole display, and for a frame of its own only when
+        // the system gives it one (a split or floating window). Declaring both is what makes those
+        // gestures available to it at all — an app that names only `fullscreen` is not offered them.
+        "supportWindowMode": [
+          "fullscreen",
+          "split",
+          "floating"
+        ],
         "exported": true,
         "skills": [
           {

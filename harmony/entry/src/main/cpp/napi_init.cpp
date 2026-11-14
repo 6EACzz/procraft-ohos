@@ -45,6 +45,12 @@ bool g_size_from_page = false;
 uint32_t g_page_width = 0;
 uint32_t g_page_height = 0;
 
+// The panel's refresh rate, in Hz, as the page read it from the system (`setFrameRate`). It says
+// two things: the pace the app draws its frames at (told to the app through `procraft_frame_rate`),
+// and what the surface asks the system for, so that a panel that can refresh at 120 does (a panel
+// left asking for nothing stays at 60, whichever modes it has).
+uint32_t g_hertz = 0;
+
 // A JS string out of a N-API value, as UTF-8.
 std::string StringOf(napi_env env, napi_value value) {
     size_t length = 0;
@@ -72,7 +78,23 @@ bool BoolOf(napi_env env, napi_value value) {
     return flag;
 }
 
-// The surface is ready: the app starts drawing in it.
+// Asks the system for the panel's rate, as the page reported it. It is asked for again whenever a
+// surface comes: the request belongs to the surface that is showing, so a range asked for before one
+// existed (or after the old one went) reaches nothing, and RenderService goes on at its own 60 Hz.
+static void AskForTheFrameRate(OH_NativeXComponent* component) {
+    if (component == nullptr || g_hertz == 0) return;
+    // the range is the one rate: the app draws a frame a refresh and no faster
+    OH_NativeXComponent_ExpectedRateRange range = {.min = static_cast<int32_t>(g_hertz),
+                                                   .max = static_cast<int32_t>(g_hertz),
+                                                   .expected = static_cast<int32_t>(g_hertz)};
+    int32_t result = OH_NativeXComponent_SetExpectedFrameRateRange(component, &range);
+    if (result == OH_NATIVEXCOMPONENT_RESULT_SUCCESS) {
+        OH_LOG_INFO(LOG_APP, "the surface takes %{public}u Hz", g_hertz);
+    } else {
+        OH_LOG_WARN(LOG_APP, "the frame rate: the surface would not take %{public}u Hz: %{public}d", g_hertz, result);
+    }
+}
+
 void OnSurfaceCreated(OH_NativeXComponent* component, void* window) {
     uint64_t width = 0;
     uint64_t height = 0;
@@ -90,6 +112,7 @@ void OnSurfaceCreated(OH_NativeXComponent* component, void* window) {
         g_height = static_cast<uint32_t>(height);
     }
     OH_LOG_INFO(LOG_APP, "the surface is ready: %{public}ux%{public}u", g_width, g_height);
+    AskForTheFrameRate(component);
     // (this is only the size the app starts at: the page's own measurement in pixels comes through
     // `resized` as soon as it is laid out, and is the one the app resizes to)
     procraft_start(window, g_width, g_height, g_scale);
@@ -264,6 +287,25 @@ napi_value SetScale(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
+// The panel's refresh rate in Hz, as the page read it from the system (`display`'s
+// `getDefaultDisplaySync().refreshRate`): the app's frames are paced at it, and the surface asks
+// the system for it, which is what lifts the panel off the 60 Hz it settles at when nothing asks
+// for more.
+napi_value SetFrameRate(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value argv[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+    if (argc < 1) return nullptr;
+    uint32_t hertz = 0;
+    if (napi_get_value_uint32(env, argv[0], &hertz) != napi_ok || hertz == 0 || hertz > 1000) {
+        return nullptr;
+    }
+    g_hertz = hertz;
+    procraft_frame_rate(hertz);
+    AskForTheFrameRate(g_component);
+    return nullptr;
+}
+
 // The page's size in pixels (the surface's own): the app draws at it.
 napi_value Resized(napi_env env, napi_callback_info info) {
     size_t argc = 2;
@@ -392,6 +434,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"setOwnFolder", nullptr, SetOwnFolder, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setScale", nullptr, SetScale, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setFrameRate", nullptr, SetFrameRate, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"resized", nullptr, Resized, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"focused", nullptr, Focused, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"key", nullptr, Key, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -413,6 +456,7 @@ static napi_value Init(napi_env env, napi_value exports) {
             OH_NativeXComponent_RegisterMouseEventCallback(component, &g_mouse_callback);
             OH_NativeXComponent_RegisterKeyEventCallback(component, OnKey);
             g_component = component;
+            AskForTheFrameRate(component);
             OH_LOG_INFO(LOG_APP, "the XComponent is ready");
         }
     }
