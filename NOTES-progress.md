@@ -21,9 +21,10 @@
 
 ## 交付物
 
-`output/procraft-harmony-signed.hap` / `output/procraft-harmony-unsigned.hap`
-是合并上游后的构建（`0.0.5-beta` / minAPIVersion 50004016 / targetAPI 6.1.1(24)），
-**尚未包含帧率与窗口模式这两项改动**（代码已入 `main` 的 `6faae8f`，交付物待重新导出）。
+`output/procraft-harmony-signed.hap`（44826504 B, md5 `c9520d15…`）
+`output/procraft-harmony-unsigned.hap`（44415295 B, md5 `64fc7de3…`）
+已包含帧率与窗口模式改动（`0.0.5-beta` / minAPIVersion 50004016 / targetAPI 6.1.1(24) /
+`supportWindowMode: [fullscreen, split, floating]`）。
 CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP + SHA256SUMS。
 
 ## 已完成并验证（HUAWEI MatePad 11.5''S，HarmonyOS 6.1.0 / API 24，2800×1840）
