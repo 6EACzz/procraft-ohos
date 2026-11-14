@@ -1933,8 +1933,14 @@ impl Gallery {
         let list_height = (45.0 + 45.0 * self.presets.len().saturating_sub(1) as f32).min(PRESETS_MOST);
         // a row more for each kind of artwork a plugin makes
         let kinds_height = self.kinds.len() as f32 * (9.5 + 38.0);
-        let height = panel::ARROW_HEIGHT + NEW_HEADER + 38.0 + 9.5 + list_height + kinds_height + 30.0;
-        let rect = Rect::from_min_size(pos2(left, screen.top() + 56.5), vec2(NEW_WIDTH, height));
+        let top = screen.top() + 56.5;
+        let fixed = panel::ARROW_HEIGHT + NEW_HEADER + 38.0 + 9.5 + kinds_height + 30.0;
+        // as tall as the window allows, and the list takes what is left of that: a panel taller
+        // than this would put its presets, and the scrolling that reaches them, off the screen's
+        // bottom edge
+        let height = (fixed + list_height).min(panel::most_height(screen, top, 8.0));
+        let list_height = (height - fixed).max(0.0);
+        let rect = Rect::from_min_size(pos2(left, top), vec2(NEW_WIDTH, height));
         let mut asked = None;
         let mut close = false;
         egui::Area::new(Id::unique("new canvas")).fixed_pos(screen.min).order(Order::Foreground).show(ctx, |ui| {

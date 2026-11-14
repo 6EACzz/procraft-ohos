@@ -40,6 +40,47 @@ static ON_SCREEN: Mutex<Option<HashMap<u64, bool>>> = Mutex::new(None);
 /// Pointers the system took back whose lift hasn't come yet.
 static TAKEN_BACK: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 
+/// A sample a pointer gave that the platform gathered but has not handed over yet: where it was,
+/// what it said, and how long before now it was taken.
+#[derive(Clone, Copy, Debug)]
+pub struct Gathered {
+    pub at: (f32, f32),
+    pub pressure: f32,
+    pub tilt: f32,
+    pub orientation: f32,
+    pub age_ms: f64,
+}
+
+/// Each pointer's samples gathered since the interface's input last took them. A platform that
+/// takes input a frame at a time gathers many points in each and hands over only the last: a pen
+/// is read every millisecond or so, and handed one sample a frame, a curve drawn quickly is a few
+/// straight runs between one frame and the next. The times are kept as ages (how long before the
+/// touch that is being handed over each was taken) so that they need no clock shared with the
+/// platform.
+static GATHERED: Mutex<Option<HashMap<u64, Vec<Gathered>>>> = Mutex::new(None);
+
+/// How many samples a pointer's queue keeps: more than a frame of them, so none is lost, and few
+/// enough that a platform that stops saying leaves nothing behind.
+const GATHERED_KEPT: usize = 256;
+
+/// Pointer `id` gave `sample`, which was taken `age_ms` before the touch now being handed over.
+#[cfg_attr(not(target_env = "ohos"), allow(dead_code))]
+pub(crate) fn gather(id: u64, sample: Gathered) {
+    let Ok(mut all) = GATHERED.lock() else { return };
+    let queue = all.get_or_insert_with(Default::default).entry(id).or_default();
+    if queue.len() >= GATHERED_KEPT {
+        queue.clear();
+    }
+    queue.push(sample);
+}
+
+/// What `id` had to say since the last time, oldest first (empty: the platform gathers nothing for
+/// it, and the touches it sends are all there is).
+pub fn gathered(id: u64) -> Vec<Gathered> {
+    let Ok(mut all) = GATHERED.lock() else { return Vec::new() };
+    all.as_mut().and_then(|all| all.remove(&id)).unwrap_or_default()
+}
+
 /// A tablet's pen moving the mouse pointer (X11 and a Mac give it as the mouse): its pressure
 /// (0..1) and whether its eraser end is the one on the screen.
 #[derive(Clone, Copy, Debug, PartialEq)]

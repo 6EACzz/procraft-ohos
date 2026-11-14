@@ -16,6 +16,9 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceId, Force, MouseScrollDelta, Touch, TouchPhase, WindowEvent};
 use winit::keyboard::{KeyCode, ModifiersState, NamedKey};
 
+/// The id the shell gives a mouse's touches (`MOUSE_ID` in `napi_init.cpp`): not a finger's, so
+/// egui is not told it is one — a touch screen's drags are not a mouse's.
+pub const MOUSE_ID: u64 = 0xFFFF;
 
 /// egui's own key for one the system gave: its name, as egui names keys ("A", "Space", "ArrowLeft").
 fn egui_key(named: Option<NamedKey>, character: Option<char>) -> Option<egui::Key> {
@@ -208,6 +211,27 @@ impl Input {
         // egui: a pointer's move, press or release (egui's pointer ids are its own), in points
         let pos = egui::pos2((x / f64::from(self.density)) as f32, (y / f64::from(self.density)) as f32);
         self.egui_events.push(egui::Event::PointerMoved(pos));
+        // and the touch itself, which is what tells egui there is a touch screen at all: it works
+        // that out from the touches it is given (`InputState::has_touch_screen`), and without one
+        // it will not let a finger drag a list — every `ScrollArea` asks, `ScrollSource`'s drag
+        // being `OnTouch`, so a menu too tall for the window could not be scrolled (nor could a
+        // pinch be seen: `Response::multi_touch`). The mouse is not a finger: the shell gives it
+        // these same touches, and a mouse dragging a list is not what egui means by a drag.
+        log::debug!("a touch for egui: id {} pen {} phase {:?}", id, pen, phase);
+        if id != MOUSE_ID {
+            self.egui_events.push(egui::Event::Touch {
+                device_id: egui::TouchDeviceId(0),
+                id: egui::TouchId::from(id),
+                phase: match phase {
+                    TouchPhase::Started => egui::TouchPhase::Start,
+                    TouchPhase::Moved => egui::TouchPhase::Move,
+                    TouchPhase::Ended => egui::TouchPhase::End,
+                    TouchPhase::Cancelled => egui::TouchPhase::Cancel,
+                },
+                pos,
+                force: if pen { Some(now.pressure as f32) } else { None },
+            });
+        }
         let button = if pen && eraser { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
         match phase {
             TouchPhase::Started => {

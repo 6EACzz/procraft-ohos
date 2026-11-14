@@ -147,13 +147,74 @@ void OnSurfaceDestroyed(OH_NativeXComponent* component, void* window) {
     g_component = nullptr;
 }
 
+// Whether a tool is the pen's (something a hand holds) rather than a finger.
+bool IsPenTool(OH_NativeXComponent_TouchPointToolType tool) {
+    return tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_PEN || tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_RUBBER ||
+           tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_BRUSH || tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_PENCIL;
+}
+
+// Whether a tool is the pen's other end, which erases.
+bool IsEraserTool(OH_NativeXComponent_TouchPointToolType tool) {
+    return tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_RUBBER;
+}
+
+// Whether a gathered point's source tool is a pen's (a thing a hand holds), and whether it is the
+// pen's other end: gathered points carry the source tool rather than the touch point's tool type,
+// the two enums being the same list under two names.
+bool IsPenSource(OH_NativeXComponent_TouchEvent_SourceTool tool) {
+    return tool == OH_NATIVEXCOMPONENT_SOURCETOOL_PEN || tool == OH_NATIVEXCOMPONENT_SOURCETOOL_RUBBER ||
+           tool == OH_NATIVEXCOMPONENT_SOURCETOOL_BRUSH || tool == OH_NATIVEXCOMPONENT_SOURCETOOL_PENCIL;
+}
+
+bool IsEraserSource(OH_NativeXComponent_TouchEvent_SourceTool tool) {
+    return tool == OH_NATIVEXCOMPONENT_SOURCETOOL_RUBBER;
+}
+
+// The points the system gathered before the touch now being handed over, oldest first: it reports
+// input once a frame and keeps every point it collected in the meantime (a pen is read every
+// millisecond or so), and each is passed on with how long before that touch it was taken. Without
+// them a curve drawn quickly is a few straight runs between one frame and the next: the app lays a
+// stroke's path out from its samples' own times, so it can only smooth what it is told about.
+//
+// A point as new as the touch's own is that touch's, and is left to it: the system's event ends
+// with the newest point of the frame, so the gathered ones stop just before it. Only moves are
+// taken: the press and the lift are the event's own points, and they reach the app as its phases.
+int32_t HandOverTheGathered(OH_NativeXComponent* component, void* window,
+                           const OH_NativeXComponent_TouchEvent& event) {
+    int32_t count = 0;
+    OH_NativeXComponent_HistoricalPoint* points = nullptr;
+    if (OH_NativeXComponent_GetHistoricalPoints(component, window, &count, &points) !=
+            OH_NATIVEXCOMPONENT_RESULT_SUCCESS ||
+        points == nullptr) {
+        return 0;
+    }
+    int32_t handed = 0;
+    for (int32_t i = 0; i < count; ++i) {
+        const OH_NativeXComponent_HistoricalPoint& point = points[i];
+        if (point.type != OH_NATIVEXCOMPONENT_MOVE || point.timeStamp >= event.timeStamp) continue;
+        const double tilt = std::sqrt(static_cast<double>(point.titlX) * point.titlX +
+                                      static_cast<double>(point.titlY) * point.titlY) *
+                            (3.14159265358979 / 180.0);
+        const double orientation = std::atan2(static_cast<double>(point.titlY), static_cast<double>(point.titlX));
+        const double pressure = point.force > 0.0f ? static_cast<double>(point.force) : 1.0;
+        const double age = static_cast<double>(event.timeStamp - point.timeStamp) / 1000000.0;
+        procraft_touch_gathered(static_cast<uint64_t>(point.id), static_cast<double>(point.x),
+                                static_cast<double>(point.y), pressure, tilt, orientation,
+                                IsPenSource(point.sourceTool), IsEraserSource(point.sourceTool), age);
+        ++handed;
+    }
+    return handed;
+}
+
 // A touch came: a finger's, or the pen's.
 void OnTouch(OH_NativeXComponent* component, void* window) {
     // nothing to draw into, and nothing to draw with: the surface is on its way in or out
     if (g_window == nullptr) return;
     OH_NativeXComponent_TouchEvent event;
     if (OH_NativeXComponent_GetTouchEvent(component, window, &event) != OH_NATIVEXCOMPONENT_RESULT_SUCCESS) return;
-    OH_LOG_INFO(LOG_APP, "a touch: %{public}u points", event.numPoints);
+    // what was gathered before these, handed over first (they come before in time)
+    const int32_t gathered = HandOverTheGathered(component, window, event);
+    OH_LOG_DEBUG(LOG_APP, "a touch: %{public}u points, and %{public}d gathered before them", event.numPoints, gathered);
     for (uint32_t i = 0; i < event.numPoints; ++i) {
         const OH_NativeXComponent_TouchPoint& point = event.touchPoints[i];
         uint32_t phase = 1;

@@ -39,6 +39,14 @@ void procraft_wake();
 void procraft_touch(uint64_t id, uint32_t phase, double x, double y, double pressure, double tilt,
                     double orientation, bool pen, bool eraser);
 
+// A point the system gathered before the touch it comes with, which `procraft_touch` then carries:
+// the system reports input once a frame, keeping every point it collected in the meantime, and a
+// pen is read many times in one. `age_ms` is how long before that touch it was taken, so the
+// points of one frame are spread over that frame: handed over as one sample each, a curve drawn
+// quickly is a few straight runs between one frame and the next.
+void procraft_touch_gathered(uint64_t id, double x, double y, double pressure, double tilt,
+                             double orientation, bool pen, bool eraser, double age_ms);
+
 // A mouse moved over the surface, with nothing held down.
 void procraft_hover(uint64_t id, double x, double y, double tilt, double orientation, bool eraser);
 

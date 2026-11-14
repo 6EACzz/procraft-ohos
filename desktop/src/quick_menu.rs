@@ -354,11 +354,18 @@ impl QuickMenu {
     ) -> Option<Tap> {
         let (centre_x, button_top, button_bottom) = button;
         let current = self.slots().get(slot).copied().unwrap_or(QuickAction::None);
-        let below = button_bottom + PICKER_ARROW + PICKER_HEIGHT <= screen.bottom() - PICKER_MARGIN;
+        // as tall as it wants where the window has the room, and otherwise as tall as the roomier
+        // side of the button allows: the rows past that are reached by scrolling the list, where a
+        // panel that simply kept its height would have its first or its last rows off the screen,
+        // where neither they nor the list's own scrolling can be reached
+        let room_below = screen.bottom() - PICKER_MARGIN - (button_bottom + PICKER_ARROW);
+        let room_above = button_top - PICKER_ARROW - (screen.top() + PICKER_MARGIN);
+        let below = room_below >= room_above;
+        let height = PICKER_HEIGHT.min(if below { room_below } else { room_above }).max(0.0);
         let left = (centre_x - PICKER_WIDTH / 2.0)
             .clamp(screen.left() + PICKER_MARGIN, (screen.right() - PICKER_WIDTH - PICKER_MARGIN).max(PICKER_MARGIN));
-        let top = if below { button_bottom + PICKER_ARROW } else { button_top - PICKER_ARROW - PICKER_HEIGHT };
-        let panel = Rect::from_min_size(pos2(left, top), vec2(PICKER_WIDTH, PICKER_HEIGHT));
+        let top = if below { button_bottom + PICKER_ARROW } else { button_top - PICKER_ARROW - height };
+        let panel = Rect::from_min_size(pos2(left, top), vec2(PICKER_WIDTH, height));
         // the page's title, where its way back goes, its rows (what each says, whether it opens a
         // list, what a tap does) and the one blue (in a list of its own, the button's, else the first)
         let sets =

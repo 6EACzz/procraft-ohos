@@ -272,11 +272,33 @@ impl Input {
         read.or(self.pen_pressure).unwrap_or(1.0)
     }
 
-    /// A sample of pointer `id` at `(x, y)`: a pen's with its lean, if the system gave one.
+    /// The samples of pointer `id` since the last frame, ending with where it is now at `(x, y)`:
+    /// a pen's with its lean, if the system gave one.
+    ///
+    /// The platform gathers input a frame at a time and hands over the last point of each gather:
+    /// the ones it gathered before it are read from here (`crate::pen::gathered`), each at the
+    /// time it was taken. Handed over as one sample a frame, a curve drawn quickly is a few
+    /// straight runs between one frame and the next — the engine times its path from the samples'
+    /// own times, so it can only smooth what it is told about.
     fn sample(&self, id: u64, (x, y): (f32, f32), pressure: f32) -> Vec<PenSample> {
+        let now = self.now_ms();
         let (tilt, orientation) = crate::pen::lean(id).unwrap_or((0.0, 0.0));
         let roll = crate::pen::roll(id).unwrap_or(0.0);
-        vec![PenSample { x, y, pressure: pressure.clamp(0.0, 1.0), tilt, orientation, time_ms: self.now_ms(), roll }]
+        let gathered = crate::pen::gathered(id);
+        let mut samples: Vec<PenSample> = gathered
+            .into_iter()
+            .map(|g| PenSample {
+                x: g.at.0,
+                y: g.at.1,
+                pressure: g.pressure.clamp(0.0, 1.0),
+                tilt: g.tilt,
+                orientation: g.orientation,
+                time_ms: now - g.age_ms,
+                roll,
+            })
+            .collect();
+        samples.push(PenSample { x, y, pressure: pressure.clamp(0.0, 1.0), tilt, orientation, time_ms: now, roll });
+        samples
     }
 
     fn pressed(&mut self, session: &CanvasSession, id: u64, kind: PointerKind, at: (f32, f32), pressure: f32) {

@@ -901,6 +901,39 @@ pub extern "C" fn procraft_touch(
     tell(Said::Touch { id, phase, x, y, pressure, tilt, orientation, pen, eraser });
 }
 
+/// A point the system gathered before the touch it comes with: `age_ms` is how long before that
+/// touch it was taken. The queue is written straight from the shell's own call rather than sent
+/// on the app's channel, so the points of a frame are waiting for the touch that carries them —
+/// which is what `crate::input`'s sample reads when it lays a frame's worth of samples out.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_touch_gathered(
+    id: u64,
+    x: f64,
+    y: f64,
+    pressure: f64,
+    tilt: f64,
+    orientation: f64,
+    pen: bool,
+    eraser: bool,
+    age_ms: f64,
+) {
+    // the tool a gathered point is of belongs to the pointer itself: a pen is a pen for the
+    // whole touch, and the pinned kinds are what `on_touch` reads to know one from a finger
+    crate::pen::pointer_kind(id, pen);
+    crate::pen::eraser_kind(id, eraser);
+    crate::pen::gather(
+        id,
+        crate::pen::Gathered {
+            at: (x as f32, y as f32),
+            pressure: pressure as f32,
+            tilt: tilt as f32,
+            orientation: orientation as f32,
+            age_ms,
+        },
+    );
+    tell(Said::Wake);
+}
+
 /// A pen is near but not touching.
 #[unsafe(no_mangle)]
 pub extern "C" fn procraft_hover(id: u64, x: f64, y: f64, tilt: f64, orientation: f64, eraser: bool) {

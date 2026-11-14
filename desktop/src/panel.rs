@@ -61,6 +61,13 @@ pub fn body(rect: Rect) -> Rect {
     Rect::from_min_max(pos2(rect.left(), rect.top() + ARROW_HEIGHT), rect.max)
 }
 
+/// How tall a panel hanging from `top` may be and still be in the window, `margin` from its edges:
+/// a panel that would be taller asks for this instead, and scrolls its list, rather than ending
+/// off the screen where neither its last rows nor the rows' own scrolling can be reached.
+pub fn most_height(screen: Rect, top: f32, margin: f32) -> f32 {
+    (screen.bottom() - margin - top).max(0.0)
+}
+
 /// Draws a panel at `rect` (its arrow on top, the tip `arrow_x` from its left edge): the shadow
 /// round it, then its frosted body, whose blur goes into `backdrops` (window pixels).
 pub fn frame(ui: &Ui, look: &mut Look, slot: &'static str, rect: Rect, arrow_x: f32, backdrops: &mut Vec<f32>) {
