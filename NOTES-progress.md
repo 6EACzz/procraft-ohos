@@ -13,17 +13,17 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `9d40ff4`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
-  - `experimental/harmony-performance` = `82e57ed`（在 main 之上，性能 + 画笔纹理并行）
+  - `main` = `8f229dc`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
+  - `experimental/harmony-performance` = `bf6259d`（在 main 之上，性能 + 画笔纹理并行）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
 - 上游 `upstream/main` = `c330afd`（v0.0.6-beta），已合并进 `main`；两处冲突（`.gitignore`、`ui.rs` 的 `shortcuts`）都已手工解决，另修了三处上游改结构导致的不一致（`colour_models` 移入 `crates/core`、`stroke_sound`/`touch_keyboard` 模块、`export_plugin` 改走 `platform::pick`、`Action::PluginExport` 在 `app.rs` 补 arm）
 
 ## 交付物
 
-`output/procraft-harmony-signed.hap`（43938254 B, md5 `7ba063f8…`）
-`output/procraft-harmony-unsigned.hap`（43534103 B, md5 `f15749a0…`）
-均已更新为合并上游后的构建（`0.0.5-beta` / minAPIVersion 50004016 / targetAPI 6.1.1(24)）。
+`output/procraft-harmony-signed.hap` / `output/procraft-harmony-unsigned.hap`
+是合并上游后的构建（`0.0.5-beta` / minAPIVersion 50004016 / targetAPI 6.1.1(24)），
+**尚未包含帧率与窗口模式这两项改动**（代码已入 `main` 的 `6faae8f`，交付物待重新导出）。
 CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP + SHA256SUMS。
 
 ## 已完成并验证（HUAWEI MatePad 11.5''S，HarmonyOS 6.1.0 / API 24，2800×1840）
@@ -95,6 +95,16 @@ CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP +
 - 软键盘 150001：`.focusable(this.typing)` 依赖重绘时机 → 改为恒 `focusable(true)` 并立即请求焦点
 - 图库「正在准备画布」不消失：`canvases_made` 后只 wake 不重绘 → 补 `app.again`
 - 版本号对齐：`app.json5` 的 `0.1.0`/1000000 → `0.0.5-beta`/501
+- **帧率**：`frame_gap()` 原写死 16ms（60 Hz），而面板支持 60/30/90/120/144。现由页面读
+  `display.getDefaultDisplaySync().refreshRate` → `procraft_frame_rate` 定节奏，并交给
+  `OH_NativeXComponent_SetExpectedFrameRateRange` 申请；该申请在每次 surface 出现时重做
+  （范围属于当时显示的 surface）。实测：触摸时 120 Hz、闲置回落 60 Hz（后者是系统省电锁）
+- **窗口模式**：`module.json5` 声明 `supportWindowMode: [fullscreen, split, floating]`；
+  `EntryAbility.followWindowMode()` 用 `getWindowStatus()` + `windowStatusChange` 跟随：
+  占满屏幕时 edge-to-edge 且隐系统栏，被塞进框里时把标题栏和系统栏还回去
+- **深浅跟随系统**：`'environment'` 监听 + `setColorMode` + `setDecorButtonStyle`；因为
+  `setColorMode` 自身触发配置变更，必须记住 `this.told`，否则会 13ms 一次无限循环（曾实测）
+- 浮动窗口在深色系统下标题栏已变深色（`wm1.jpeg`），全屏启动恢复（`wm2/wm5.jpeg`）
 
 ## 已知限制（不是 bug，或需要签名配置）
 
@@ -107,7 +117,7 @@ CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP +
    `/root/otd-keys/test-build.sh`（只在构建期替换包名、结束还原，不入库）。
 4. 手写笔压感/倾斜已接入笔刷引擎，但未在真机手写笔上做压感曲线标定。
 5. 笔刷名与作品名不翻译（是用户内容）。
-6. 空闲 60 fps 锁帧可能是 HarmonyOS 自身行为（用户提示）。
+6. 空闲 60 fps 锁帧是 HarmonyOS 自身行为——已确认：交互时 120 Hz，闲置回落 60 Hz。
 
 ## 关键环境（别重复摸索）
 
