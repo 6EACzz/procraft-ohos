@@ -119,6 +119,32 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
     实际构建和测试过的 API。写更高的值等于承诺应用已经消化了新版本对它的行为改动，而这里
     并没有验证过——设备升到更高 API 也不应该自动抬高这个数字。
 
+18. **帧率要问系统，而且要在"有 surface"的时候问。**
+    原先 `frame_gap()` 写死 `16ms`（60 Hz），而 `hidumper -s RenderService -a screen` 显示这块
+    屏支持 60/30/90/**120**/**144**——应用只用了它能显示的一半。现在页面用
+    `display.getDefaultDisplaySync().refreshRate` 读出当前刷新率，经 `procraft_frame_rate`
+    交给 Rust 定帧节奏，同一个数字也交给
+    `OH_NativeXComponent_SetExpectedFrameRateRange` 向系统申请。
+
+    这个"申请"**必须在每次 surface 出现时重做**（`OnSurfaceCreated` 和 `Init` 各一次）：
+    帧率范围属于当时在显示的那个 surface，在没有 surface 时（或旧 surface 已走）申请的
+    是空的，RenderService 会继续按自己的 60 Hz 跑。实测结果是触摸时 120 Hz、闲置回落到
+    60 Hz——后者是系统自己的省电锁，不是应用的限制。
+
+    注意取的是 `refreshRate`（**当前正在跑的**），不是面板最大值：系统把它当请求而非设置，
+    申请最大值既会拖慢应用，也不会真的把面板从它已稳定的档位拉上去。
+
+19. **窗口模式是系统决定的，应用只负责"跟随"。**
+    平板上用户随时可以把窗口变成浮窗或分屏，应用没法（也不该）拒绝。所以 `module.json5`
+    声明 `"supportWindowMode": ["fullscreen", "split", "floating"]` 让这些手势对它可用，
+    然后 `EntryAbility.followWindowMode()` 用 `getWindowStatus()` + `'windowStatusChange'`
+    监听每次变化：占满屏幕时 `setWindowLayoutFullScreen(true)` 且系统栏全隐；被塞进一个框里
+    时反过来，把标题栏和系统栏都还回去，否则画布顶边会压在系统按钮底下。
+
+    另外 `setColorMode` 本身是一次配置变更，`'environment'` 监听器会听见自己刚发出的请求
+    并再发一次——所以 `applyColorMode()` 记住上次告诉过窗口的模式（`this.told`），否则
+    会以 **13 毫秒一次**的频率无限循环下去（这正是最初的样子）。
+
 ---
 
 ## 目录
