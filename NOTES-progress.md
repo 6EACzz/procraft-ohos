@@ -13,8 +13,8 @@
 - 本地产出：`/static/Dev/Temp/procraft-harmony-20261110/`（`procraft/` 是镜像，无 .git）
 - 真正仓库：构建机 `root@192.168.5.31:/root/procraft-harmony/procraft`
 - 推送目标：`https://github.com/6EACzz/procraft-ohos`（凭据 `.secrets/github.txt`）
-  - `main` = `f60a4e3`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
-  - `experimental/harmony-performance` = `bf6259d`（在 main 之上，性能 + 画笔纹理并行）
+  - `main` = `034d909`（稳定分支，已合并上游 `c330afd` = v0.0.6-beta）
+  - `experimental/harmony-performance` = `bf6259d`（在 main 之上，性能 + 画笔纹理并行；待 rebase）
   - `wip/audit-fixes` = `ab2706e`（历史分支，内容已全部并入 main）
   - `backup/pre-upstream-merge` = `fbe49bf`（合并上游前的备份）
 - 上游 `upstream/main` = `c330afd`（v0.0.6-beta），已合并进 `main`；两处冲突（`.gitignore`、`ui.rs` 的 `shortcuts`）都已手工解决，另修了三处上游改结构导致的不一致（`colour_models` 移入 `crates/core`、`stroke_sound`/`touch_keyboard` 模块、`export_plugin` 改走 `platform::pick`、`Action::PluginExport` 在 `app.rs` 补 arm）
@@ -28,6 +28,18 @@
 CI 另发布 alpha：`harmony-v<版本>-alpha` 预发布，内含未签名 HAP + SHA256SUMS。
 
 ## 已完成并验证（HUAWEI MatePad 11.5''S，HarmonyOS 6.1.0 / API 24，2800×1840）
+
+### 输入与电源
+- **触摸采样**：每帧除 `GetTouchEvent` 的最后一个点外，再从 `GetHistoricalPoints` 取回本帧
+  攒下的 1–3 个点（120–240 Hz 的笔在 60 Hz 的帧上），各带自己的时间戳交给引擎；
+  手写笔快速曲线不再断成折线（`uinput -S` 锯齿笔画已确认连续）
+- **面板纵向滚动**：`egui::Event::Touch` 此前从未推过，`has_touch_screen()` 恒为 false，
+  全部 34 个 `ScrollArea` 拖不动；补上后笔刷库两栏、Actions 各页都能拖；
+  取词面板/新建画布面板补了窗口内夹紧（`panel::most_height()`）
+- **切后台停帧**：surface 的显示/隐藏要单独注册
+  `OH_NativeXComponent_RegisterSurfaceShowCallback`/`...HideCallback`（不在
+  `OH_NativeXComponent_Callback` 里）；隐藏时不画帧也不排帧，页面定时器 16 ms → 250 ms。
+  **后台 CPU 7–8% → 1%**，切回前台立即重绘，前台表现不变
 
 ### 移植骨架
 - 界面全部复用桌面版 egui 代码（约 4.3 万行），只换窗口/事件层：`ohos_window.rs`（XComponent 的
