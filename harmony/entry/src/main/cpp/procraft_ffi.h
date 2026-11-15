@@ -31,6 +31,17 @@ void procraft_own_folder(const uint8_t* bytes, size_t length);
 // The surface is gone: the app is asked to stop (it is not waited for here).
 void procraft_surface_destroyed();
 
+// The surface is on screen again (the app was brought back to the foreground): frames are drawn
+// again, and one is drawn at once, since the surface it went away with may never have shown the
+// last one. Distinct from `procraft_wake`, which says the shell has news rather than a screen.
+void procraft_surface_shown();
+
+// The surface is off screen (the app went to the background, a window covered it, the screen went
+// out): frames stop being drawn until it is shown again. The app's thread keeps running, and the
+// artwork keeps its state, but nothing is drawn and no frame is paced: a hidden app that kept
+// drawing burned a core for a surface nobody was looking at.
+void procraft_surface_hidden();
+
 // The app is to draw again (the shell's own side has news for it).
 void procraft_wake();
 

@@ -14,3 +14,6 @@ export const asks: () => string;
 export const answer: (id: number, paths: string, clipboard: string, done: boolean) => void;
 // Whether the app has something of its own to close first: BACK closes that instead of the app.
 export const canGoBack: () => boolean;
+// The surface is on screen (or off it): nothing is drawn for a window nobody can see.
+export const surfaceShown: () => void;
+export const surfaceHidden: () => void;

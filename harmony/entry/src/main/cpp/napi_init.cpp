@@ -147,6 +147,27 @@ void OnSurfaceDestroyed(OH_NativeXComponent* component, void* window) {
     g_component = nullptr;
 }
 
+// The surface is on screen again: the app draws again, and one frame is drawn straight away (the
+// surface it went away with may never have shown the last one). The system calls this when the
+// app comes back to the foreground.
+void OnSurfaceShow(OH_NativeXComponent* component, void* window) {
+    (void)component;
+    (void)window;
+    OH_LOG_INFO(LOG_APP, "the surface is shown");
+    procraft_surface_shown();
+}
+
+// The surface is off screen: the app's window went to the background, another window covered it,
+// or the screen went out. Nothing is drawn until it is shown again — the app's thread keeps
+// running and keeps the artwork, but frames spent on a surface nobody sees are frames wasted (and
+// the system stops presenting them, so they pile up in the window's buffers).
+void OnSurfaceHide(OH_NativeXComponent* component, void* window) {
+    (void)component;
+    (void)window;
+    OH_LOG_INFO(LOG_APP, "the surface is hidden");
+    procraft_surface_hidden();
+}
+
 // Whether a tool is the pen's (something a hand holds) rather than a finger.
 bool IsPenTool(OH_NativeXComponent_TouchPointToolType tool) {
     return tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_PEN || tool == OH_NATIVEXCOMPONENT_TOOL_TYPE_RUBBER ||
@@ -488,6 +509,23 @@ napi_value CanGoBack(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// The ability's own lifecycle says the surface is showing (or not): the window callbacks say the
+// same, but they can be missed when the app is torn down and rebuilt, and a surface left hidden
+// would never draw again. The page calls these from `onForeground`/`onBackground`.
+napi_value SurfaceShown(napi_env env, napi_callback_info info) {
+    (void)env;
+    (void)info;
+    procraft_surface_shown();
+    return nullptr;
+}
+
+napi_value SurfaceHidden(napi_env env, napi_callback_info info) {
+    (void)env;
+    (void)info;
+    procraft_surface_hidden();
+    return nullptr;
+}
+
 } // namespace
 
 EXTERN_C_START
@@ -505,6 +543,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"asks", nullptr, Asks, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"answer", nullptr, Answer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"canGoBack", nullptr, CanGoBack, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"surfaceShown", nullptr, SurfaceShown, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"surfaceHidden", nullptr, SurfaceHidden, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
 
@@ -516,6 +556,11 @@ static napi_value Init(napi_env env, napi_value exports) {
             OH_NativeXComponent_RegisterCallback(component, &g_callback);
             OH_NativeXComponent_RegisterMouseEventCallback(component, &g_mouse_callback);
             OH_NativeXComponent_RegisterKeyEventCallback(component, OnKey);
+            // the surface's own comings and goings, screen- or background-wise: not part of
+            // `OH_NativeXComponent_Callback`, which has no slot for them (a separate registration
+            // each, since API 12)
+            OH_NativeXComponent_RegisterSurfaceShowCallback(component, OnSurfaceShow);
+            OH_NativeXComponent_RegisterSurfaceHideCallback(component, OnSurfaceHide);
             g_component = component;
             AskForTheFrameRate(component);
             OH_LOG_INFO(LOG_APP, "the XComponent is ready");

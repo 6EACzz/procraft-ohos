@@ -14,6 +14,12 @@ import display from '@ohos.display';
 import procraft from 'libprocraft.so';
 
 const TAG: string = 'ProCraft';
+// How often the app's asks are taken while the page is on the screen, and while it is not. The
+// front rate is a frame's: an ask is a picker or a dialog the user is waiting on, and a frame of
+// delay is not seen. The hidden rate is slower on purpose — nothing of the page is drawn, and a
+// timer at a frame's rate burns battery for a screen nobody is looking at.
+const PUMP_IN_FRONT: number = 16;
+const PUMP_BEHIND: number = 250;
 
 // One ask the app made, as `asks()` hands it over.
 interface Ask {
@@ -84,7 +90,32 @@ struct Index {
     // surface asks the system for it (a panel nothing asks of settles at 60 Hz, whatever it can do)
     this.tellFrameRate();
     // the app's asks are taken as they come (it runs on its own thread, drawing by itself)
-    this.pumpTimer = setInterval(() => this.pump(), 16);
+    this.startPumping(PUMP_IN_FRONT);
+  }
+
+  // The page is shown again: the app is being looked at, so its asks are taken at every frame.
+  // (This fires when the ability comes back to the front, which is what the hidden page's slow
+  // timer below is waiting for.)
+  onPageShow(): void {
+    this.startPumping(PUMP_IN_FRONT);
+  }
+
+  // The page is hidden: the app is behind another one, and nothing of the page is on the screen
+  // at all. Its asks are still taken, so a save or an export goes on being copied out where the
+  // user asked for it, but slowly: at every frame the timer alone costs about a thirteenth of a
+  // core of the tablet's battery for a page nobody is looking at. The app draws no frame while
+  // hidden either (`surfaceHidden`), so there is nothing for it to answer sooner than this.
+  onPageHide(): void {
+    this.startPumping(PUMP_BEHIND);
+  }
+
+  // Takes the app's asks at `every` milliseconds, at most one timer running: the interval is
+  // replaced rather than added to, so a show/hide/show leaves exactly one behind.
+  private startPumping(every: number): void {
+    if (this.pumpTimer >= 0) {
+      clearInterval(this.pumpTimer);
+    }
+    this.pumpTimer = setInterval(() => this.pump(), every);
   }
 
   // The panel's refresh rate, and what the surface asks the system for. The display's own

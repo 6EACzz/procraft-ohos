@@ -306,6 +306,12 @@ static BACK_HERE: AtomicBool = AtomicBool::new(false);
 /// nought until the page has said, which the frame's pace takes as the 60 a display ends at.
 static FRAME_HERTZ: AtomicU32 = AtomicU32::new(0);
 
+/// Whether the surface is on screen. The system says when the app's window goes to the background
+/// or comes back (`procraft_surface_hidden`/`procraft_surface_shown`): a surface nobody can see is
+/// not drawn to, and no frame is paced towards it. It starts true, because a surface that has just
+/// been made is about to be shown.
+static SURFACE_SHOWN: AtomicBool = AtomicBool::new(true);
+
 /// The app's own thread's mailbox, and the way to wake it.
 static SAID: Mutex<Option<std::sync::mpsc::Sender<Said>>> = Mutex::new(None);
 /// The app's own thread, while one runs: a surface that goes stops it, and the next start waits
@@ -366,6 +372,9 @@ pub unsafe extern "C" fn procraft_start(window: *mut c_void, width: u32, height:
         }
     }
     log::info!("ProCraft starts: {width}x{height} pixels, {pixels_per_point} pixels per point");
+    // a surface that has just been made is about to be shown: the flag is the shell's own, and a
+    // surface destroyed while hidden must not leave the new one starting up hidden
+    SURFACE_SHOWN.store(true, Ordering::Relaxed);
     // a surface that went left its app stopping: the thread it was drawing on is waited for, but
     // not here. This is the shell's own thread, which is the only thread the app's asks are
     // answered on, so waiting here would wait for an answer only this thread could give, and hold
@@ -526,6 +535,12 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         let waiting = touch_waits(&mut app);
         let now = Instant::now();
         let gap = app.host.as_ref().map_or(Duration::from_millis(16), crate::host::Host::frame_gap);
+        // a surface nobody can see is drawn to by nobody: the system stops presenting a hidden one,
+        // so the frame would be work nobody sees (measured at a third of a core with the app in the
+        // background) and would fill the window's buffers with what it will never show. The app's
+        // own wish is kept when it is not drawn for, so the frame it asked for is drawn the moment
+        // the surface is shown again.
+        let shown = SURFACE_SHOWN.load(Ordering::Relaxed);
         // a frame is due: the one the last asked for, or (nothing else drawing) the canvas's own
         let asked = app.again.take();
         // what the touches asked the app to do (undo, a fill, the view moved) is drawn for, and
@@ -533,20 +548,33 @@ fn run_loop(mut app: App<TabletHost, TabletLoop>, loop_: Arc<TabletLoop>, said: 
         // redraw for the first of these, and the canvas's own want is the other
         let commands_wait = !app.input.commands.is_empty();
         let canvas_wants = (commands_wait || app.session.as_ref().is_some_and(|s| s.wants_frame()))
-            && app.host.as_ref().is_some_and(|h| !h.minimised());
-        let frame_due = asked.or(canvas_wants.then_some(now)).map(|due| due.max(last_drawn + gap));
+            && app.host.as_ref().is_some_and(|h| !h.minimised())
+            && shown;
+        if !shown {
+            app.again = asked;
+        }
+        let frame_due = shown
+            .then_some(asked)
+            .flatten()
+            .or(canvas_wants.then_some(now))
+            .map(|due| due.max(last_drawn + gap));
         if frame_due.is_none_or(|due| due <= now) {
             frame(&mut app);
             last_drawn = Instant::now();
         }
         // when the next frame is due: what this draw asked for, or the canvas's own want (paced:
-        // a frame that couldn't be drawn yet keeps its own time, or nothing would wake for it)
-        let next_frame = app
-            .again
-            .take()
-            .map(|due| due.max(last_drawn + gap))
-            .or_else(|| canvas_wants.then(|| last_drawn + gap))
-            .or(frame_due);
+        // a frame that couldn't be drawn yet keeps its own time, or nothing would wake for it).
+        // Hidden, none of it is due: the loop waits for the shell to say something (the showing
+        // above all), and the app's own wish stays in `app.again` for that moment.
+        let next_frame = shown
+            .then(|| {
+                app.again
+                    .take()
+                    .map(|due| due.max(last_drawn + gap))
+                    .or_else(|| canvas_wants.then(|| last_drawn + gap))
+                    .or(frame_due)
+            })
+            .flatten();
         // a wait that has run out and changed nothing (a repeat due while nothing is held) would
         // have this loop pass it by again and again: one already past is not waited for
         let waiting = waiting.filter(|at| *at > Instant::now());
@@ -877,6 +905,30 @@ pub extern "C" fn procraft_surface_destroyed() {
     // turned, the window resized, the app brought back), which waits for this one to have gone
     tell(Said::Stop);
     stop_app();
+}
+
+/// The window's surface is on screen again (the app came back to the foreground).
+///
+/// A frame is drawn at once rather than when the next one is due: the surface it went away with
+/// may never have shown the last one, and a window that was hidden can come back with whatever it
+/// had in its buffers, so nothing else would put the interface back.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_surface_shown() {
+    // (set before the wake, so the frame that wake draws is drawn: the other order draws none and
+    // then waits for a wake that has already come)
+    SURFACE_SHOWN.store(true, Ordering::Relaxed);
+    tell(Said::Wake);
+}
+
+/// The window's surface is off screen (the app went to the background, or the screen went out).
+///
+/// Nothing is drawn until it is shown again. The system stops presenting a hidden surface, so the
+/// frames drawn to it are work nobody sees — measured at a third of a core with the app in the
+/// background — and its buffers fill with frames the window was never going to show.
+#[unsafe(no_mangle)]
+pub extern "C" fn procraft_surface_hidden() {
+    SURFACE_SHOWN.store(false, Ordering::Relaxed);
+    tell(Said::Wake);
 }
 
 /// A frame is to be drawn now (a touch came, a key did, the interface asked).

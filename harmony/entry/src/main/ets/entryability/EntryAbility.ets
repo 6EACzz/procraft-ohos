@@ -174,6 +174,10 @@ export default class EntryAbility extends UIAbility {
     // drawn again as it was: a touch already down when the app went behind is not still down
     // when it comes back, so the app is told it may take input again
     procraft.focused(true);
+    // the surface's own show/hide callback says the same for the window (`OnSurfaceShow`), but
+    // this ability's lifecycle is the one that always fires: the window callbacks can be missed
+    // when the app is torn down and rebuilt, and a surface left hidden would never draw again
+    procraft.surfaceShown();
   }
 
   onBackground(): void {
@@ -181,6 +185,8 @@ export default class EntryAbility extends UIAbility {
     // nothing is drawn behind other apps, and nothing is touched: the app lets go of whatever
     // it had in hand (a finger down would otherwise stay down forever)
     procraft.focused(false);
+    // and nothing is drawn at all: frames spent on a hidden surface are frames nobody sees
+    procraft.surfaceHidden();
   }
 
   // The page is going away with the app: its surface is destroyed by the page itself (see
