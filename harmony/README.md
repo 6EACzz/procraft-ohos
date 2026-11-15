@@ -181,6 +181,26 @@ wgpu 的 Vulkan 后端不认 `OhosNdk` 窗口句柄（`create_surface` 直接返
     比窗口高时会被画到屏幕外，那部分连滚动都够不着。现在都按窗口剩余高度收紧
     （`panel::most_height()`），列表再高也是滚动可达的。
 
+22. **看不见的窗口，谁也别给它画帧。**
+    XComponent 的 surface 什么时候在屏幕上、什么时候不在，`OH_NativeXComponent_Callback`
+    里并没有说——那套回调只有 created/changed/destroyed。真正的答案是另外注册的两个：
+    `OH_NativeXComponent_RegisterSurfaceShowCallback` / `...HideCallback`
+    （`ace/xcomponent/native_interface_xcomponent.h`，`@since 12`，**不在** `Callback` 结构里，
+    要单独注册）。只靠 created/destroyed 的话，切后台既不销毁也不重建 surface，应用于是
+    一直往一个没人展示的窗口里画——真机上实测 **7–8% 单核**，全是看不见的帧。
+
+    现在 surface 显示状态由一个 `AtomicBool`（`SURFACE_SHOWN`）带着，`run_loop` 在它
+    为假时不画帧、也不为下一帧计时，只等 shell 唤醒；应用自己想要的那一帧存在 `app.again`
+    里，surface 一显示就补上。`EntryAbility` 的 `onForeground`/`onBackground` 也调同两个
+    函数兜底：窗口回调在应用被拆掉重建时可能漏一次，而 ability 生命周期一定触发，
+    一旦漏了就再也不会画。
+
+    另一半是 ArkTS 侧的提问轮询：`setInterval(() => this.pump(), 16)` 在页面被别的应用
+    盖住时照跑，每秒 62 次加锁、分配 `"[]"`。改成 `onPageShow`/`onPageHide` 切换间隔
+    （前台一帧一次，后台 250 ms 一次，且只留一个 timer）。**后台 8% → 1%**。
+    前台那一帧一次的代价这里不动——那是性能分支的事（用"被通知"代替"去问"），
+    这处改的是看不见的窗口，不是空闲的窗口。
+
 ---
 
 ## 目录
@@ -245,6 +265,8 @@ cd harmony
   面板高度按窗口剩余空间收紧，不会再有"画到屏幕外、滑不到"的部分
 - **触摸采样**：每帧从 `GetHistoricalPoints` 额外拿到 1–3 个点（120–240 Hz 的笔迹在
   60 Hz 的帧上），带各自的时间戳交给笔刷引擎
+- **切后台不再画帧**：surface 隐藏时 CPU 从 7–8% 降到 1%（`surfaceHidden` + 页面定时器降频），
+  切回前台立刻重绘（截图 md5 变化），前台表现不变
 
 ---
 
